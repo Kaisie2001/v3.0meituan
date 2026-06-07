@@ -47,6 +47,28 @@ function hasField(missingFields: MissingField[], field: MissingField) {
   return missingFields.includes(field);
 }
 
+function ChoiceButton({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
+        active ? "border-meituan-yellow bg-yellow-50 text-meituan-ink" : "border-black/10 bg-white text-black/70 hover:border-black/20"
+      }`}
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function ClarifyModal({ open, missingFields, draft, onClose, onSubmit }: ClarifyModalProps) {
   const [startTime, setStartTime] = useState<string>(draft.startTime ?? "14:00");
   const [durationMinutes, setDurationMinutes] = useState<number>(draft.durationMinutes ?? 300);
@@ -60,147 +82,134 @@ export function ClarifyModal({ open, missingFields, draft, onClose, onSubmit }: 
   if (!open) return null;
 
   return (
-    <div className="absolute inset-0 z-50 grid place-items-center overflow-y-auto bg-black/35 px-3 py-4">
-      <div className="w-full max-w-[350px] rounded-2xl border border-black/10 bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-extrabold text-meituan-ink">补全关键信息</h2>
-            <p className="mt-1 text-sm text-black/60">为了生成可执行方案，需要你确认几个关键信息。</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm font-bold text-black/60 hover:bg-black/5"
-          >
-            取消
-          </button>
+    <div className="pointer-events-auto absolute inset-0 z-[3000] flex items-end justify-center bg-black/35">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="clarify-modal-title"
+        className="mx-3 flex max-h-[78%] w-[calc(100%-24px)] max-w-none flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl"
+      >
+        <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-black/12" aria-hidden="true" />
+
+        <div className="shrink-0 px-4 pb-2 pt-3">
+          <h2 id="clarify-modal-title" className="text-base font-extrabold text-meituan-ink">
+            补全关键信息
+          </h2>
+          <p className="mt-1 text-sm leading-5 text-black/60">为了生成可执行方案，需要你确认几个关键信息。</p>
         </div>
 
-        <div className="space-y-4">
-          {hasField(fieldsToAsk, "partySize") ? (
-            <div className="rounded-xl bg-meituan-gray p-4">
-              <p className="mb-2 text-sm font-bold text-black/75">你们几个人？</p>
-              <div className="flex flex-wrap gap-2">
-                {partySizeChoices.map((choice) => (
-                  <button
-                    key={choice.value}
-                    type="button"
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      partySize === choice.value ? "border-meituan-yellow bg-yellow-50 text-meituan-ink" : "border-black/10 bg-white text-black/70 hover:border-black/20"
-                    }`}
-                    onClick={() => setPartySize(choice.value)}
-                  >
-                    {choice.label}
-                  </button>
-                ))}
-                <label className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-black/70">
-                  自定义
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+          <div className="space-y-3">
+            {hasField(fieldsToAsk, "partySize") ? (
+              <div className="rounded-xl bg-meituan-gray p-3">
+                <p className="mb-2 text-sm font-bold text-black/75">你们几个人？</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {partySizeChoices.map((choice) => (
+                    <ChoiceButton
+                      key={choice.value}
+                      active={partySize === choice.value}
+                      label={choice.label}
+                      onClick={() => setPartySize(choice.value)}
+                    />
+                  ))}
+                </div>
+                <label className="mt-2 flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-black/70">
+                  自定义人数
                   <input
-                    className="w-16 rounded border border-black/10 bg-meituan-gray px-2 py-1 text-sm outline-none focus:border-meituan-yellow focus:bg-white"
+                    className="min-w-0 flex-1 rounded border border-black/10 bg-meituan-gray px-2 py-1 text-sm outline-none focus:border-meituan-yellow focus:bg-white"
                     value={partySize}
                     onChange={(event) => setPartySize(Number(event.target.value || 0))}
                     inputMode="numeric"
                   />
                 </label>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {hasField(fieldsToAsk, "durationMinutes") ? (
-            <div className="rounded-xl bg-meituan-gray p-4">
-              <p className="mb-2 text-sm font-bold text-black/75">计划玩多久？</p>
-              <div className="flex flex-wrap gap-2">
-                {durationChoices.map((choice) => (
-                  <button
-                    key={choice.value}
-                    type="button"
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      durationMinutes === choice.value ? "border-meituan-yellow bg-yellow-50 text-meituan-ink" : "border-black/10 bg-white text-black/70 hover:border-black/20"
-                    }`}
-                    onClick={() => setDurationMinutes(choice.value)}
-                  >
-                    {choice.label}
-                  </button>
-                ))}
+            {hasField(fieldsToAsk, "durationMinutes") ? (
+              <div className="rounded-xl bg-meituan-gray p-3">
+                <p className="mb-2 text-sm font-bold text-black/75">计划玩多久？</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {durationChoices.map((choice) => (
+                    <ChoiceButton
+                      key={choice.value}
+                      active={durationMinutes === choice.value}
+                      label={choice.label}
+                      onClick={() => setDurationMinutes(choice.value)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {hasField(fieldsToAsk, "maxCommuteMinutes") ? (
-            <div className="rounded-xl bg-meituan-gray p-4">
-              <p className="mb-2 text-sm font-bold text-black/75">最远通勤能接受多久？</p>
-              <div className="flex flex-wrap gap-2">
-                {commuteChoices.map((choice) => (
-                  <button
-                    key={choice.value}
-                    type="button"
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      maxCommuteMinutes === choice.value ? "border-meituan-yellow bg-yellow-50 text-meituan-ink" : "border-black/10 bg-white text-black/70 hover:border-black/20"
-                    }`}
-                    onClick={() => setMaxCommuteMinutes(choice.value)}
-                  >
-                    {choice.label}
-                  </button>
-                ))}
+            {hasField(fieldsToAsk, "maxCommuteMinutes") ? (
+              <div className="rounded-xl bg-meituan-gray p-3">
+                <p className="mb-2 text-sm font-bold text-black/75">最远通勤能接受多久？</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {commuteChoices.map((choice) => (
+                    <ChoiceButton
+                      key={choice.value}
+                      active={maxCommuteMinutes === choice.value}
+                      label={choice.label}
+                      onClick={() => setMaxCommuteMinutes(choice.value)}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {hasField(fieldsToAsk, "startTime") ? (
-            <div className="rounded-xl bg-meituan-gray p-4">
-              <p className="mb-2 text-sm font-bold text-black/75">什么时候出发？</p>
-              <div className="flex flex-wrap gap-2">
-                {startTimeChoices.map((choice) => (
-                  <button
-                    key={choice.value}
-                    type="button"
-                    className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                      startTime === choice.value ? "border-meituan-yellow bg-yellow-50 text-meituan-ink" : "border-black/10 bg-white text-black/70 hover:border-black/20"
-                    }`}
-                    onClick={() => setStartTime(choice.value)}
-                  >
-                    {choice.label}
-                  </button>
-                ))}
-                <label className="flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-semibold text-black/70">
-                  自定义
+            {hasField(fieldsToAsk, "startTime") ? (
+              <div className="rounded-xl bg-meituan-gray p-3">
+                <p className="mb-2 text-sm font-bold text-black/75">什么时候出发？</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {startTimeChoices.map((choice) => (
+                    <ChoiceButton
+                      key={choice.value}
+                      active={startTime === choice.value}
+                      label={choice.label}
+                      onClick={() => setStartTime(choice.value)}
+                    />
+                  ))}
+                </div>
+                <label className="mt-2 flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm font-semibold text-black/70">
+                  自定义时间
                   <input
-                    className="w-20 rounded border border-black/10 bg-meituan-gray px-2 py-1 text-sm outline-none focus:border-meituan-yellow focus:bg-white"
+                    className="min-w-0 flex-1 rounded border border-black/10 bg-meituan-gray px-2 py-1 text-sm outline-none focus:border-meituan-yellow focus:bg-white"
                     value={startTime}
                     onChange={(event) => setStartTime(event.target.value)}
                     placeholder="14:00"
                   />
                 </label>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
-        <div className="mt-5 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            className="rounded-lg border border-black/10 bg-white px-5 py-2.5 text-sm font-bold text-black/70 hover:bg-black/5"
-            onClick={onClose}
-          >
-            先不生成
-          </button>
-          <button
-            type="button"
-            className="rounded-lg bg-meituan-yellow px-6 py-2.5 text-sm font-bold text-meituan-ink transition hover:brightness-95"
-            onClick={() => {
-              onSubmit({
-                startTime,
-                durationMinutes,
-                partySize,
-                maxCommuteMinutes,
-              });
-            }}
-          >
-            确认并生成
-          </button>
+        <div className="shrink-0 border-t border-black/6 px-4 py-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/70 hover:bg-black/5"
+              onClick={onClose}
+            >
+              先不生成
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-bold text-meituan-ink transition hover:brightness-95"
+              onClick={() => {
+                onSubmit({
+                  startTime,
+                  durationMinutes,
+                  partySize,
+                  maxCommuteMinutes,
+                });
+              }}
+            >
+              确认并生成
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
-
