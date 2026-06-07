@@ -263,7 +263,7 @@ export function BottomPlanSheet({
   const displayPoi = selectedPoi ?? rankedPois[0];
 
   return (
-    <div className="pointer-events-auto flex min-h-[280px] w-full flex-col overflow-hidden">
+    <div className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden">
       <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-black/12" aria-hidden="true" />
 
       <div className="flex shrink-0 gap-1 border-b border-black/6 px-3 pb-0 pt-1">

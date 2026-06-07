@@ -157,7 +157,7 @@ export default function Home() {
 
             {screen === "result" ? (
               <div className="relative h-full overflow-hidden bg-white">
-                <div className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
+                <div className="absolute inset-0 z-0 pb-16 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
                   <LeafletPlannerMap
                     variant="hero"
                     className="h-full w-full"
@@ -168,7 +168,7 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="absolute inset-x-0 bottom-0 z-[9999] flex max-h-[45%] min-h-[280px] flex-col overflow-hidden rounded-t-[28px] border border-yellow-200 bg-white shadow-2xl">
+                <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[9999] flex h-[45%] max-h-[48%] min-h-[280px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl">
                   <BottomPlanSheet
                     routePlan={result.routePlan}
                     rankedPois={result.rankedPois}

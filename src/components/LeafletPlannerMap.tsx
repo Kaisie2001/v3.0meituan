@@ -164,7 +164,7 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
       <div className={`relative z-0 h-full w-full overflow-hidden bg-slate-100 ${className}`}>
         <div
           ref={hostRef}
-          className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[2]"
+          className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[2]"
         />
         <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-lg bg-white/92 px-2 py-1.5 shadow-sm backdrop-blur-sm">
           {legend}
