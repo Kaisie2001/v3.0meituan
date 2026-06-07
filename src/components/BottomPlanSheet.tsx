@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getPersonaConfig, inferPersona } from "@/lib/persona";
+import { getFallbackPersonaReason, getPersonaConfig, getPersonaSlotLabel } from "@/lib/persona";
 import {
   buildPlanComparison,
   getActivePlanLabels,
@@ -54,12 +54,6 @@ type CurrentPlanSummary = {
   strategyNote: string;
 };
 
-const slotTypeLabel = {
-  activity: "活动",
-  food: "用餐",
-  extra: "饭后活动",
-};
-
 const tabs: { id: SheetTab; label: string }[] = [
   { id: "main", label: "主方案" },
   { id: "fallback", label: "备选方案" },
@@ -71,15 +65,6 @@ const levelLabel = {
   yellow: "可选",
   red: "不建议",
   gray: "不可用",
-};
-
-const fallbackPersonaCopy = {
-  friends: "这个替代方案离集合点更近，减少等人和临时改约成本。",
-  family: "这个替代方案转场更少，更适合带孩子时快速切换。",
-  date: "这个替代方案节奏更松，适合保留聊天和散步时间。",
-  work: "这个替代方案等待更短，不压缩学习/办公/准备时间。",
-  errand: "这个替代方案更顺路，方便先办事再停留或用餐。",
-  casual: "这个替代方案更灵活，适合按排队、天气或心情随时替换。",
 };
 
 const FALLBACK_SLOT_TEXT = "该备选方案将替换风险较高节点，降低等待或绕路风险。";
@@ -137,7 +122,7 @@ function buildCurrentPlanSummary(
         slotFallbackText: slots.length ? undefined : FALLBACK_SLOT_TEXT,
         reasons: rationaleNotes.length
           ? rationaleNotes.slice(0, 3)
-          : [fallbackPersonaCopy[inferPersona(parseResult)]],
+          : [getFallbackPersonaReason(parseResult)],
         strategyNote,
       };
     }
@@ -196,6 +181,7 @@ function RouteGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
 function MainTabContent({
   summary,
   guidance,
+  parseResult,
   preferenceSummary,
   onOpenRoutePreferences,
   switchFeedback,
@@ -205,6 +191,7 @@ function MainTabContent({
 }: {
   summary: CurrentPlanSummary;
   guidance: RouteGuidanceSummary;
+  parseResult: ParseResult;
   preferenceSummary?: string;
   onOpenRoutePreferences?: () => void;
   switchFeedback: string | null;
@@ -226,6 +213,7 @@ function MainTabContent({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-extrabold text-meituan-ink">{summary.usageLabel}</p>
+            <p className="mt-0.5 text-xs font-bold text-meituan-ink">{summary.planTitle}</p>
             <p className="mt-1 text-[11px] leading-5 text-black/55">
               <span className="font-bold text-black/62">偏好摘要：</span>
               {prefText}
@@ -279,7 +267,7 @@ function MainTabContent({
         <p className="mb-1 text-[11px] font-bold text-black/45">关键节点</p>
         <div className="space-y-1">
           {displaySlots.length ? (
-            displaySlots.map((slot) => (
+            displaySlots.map((slot, index) => (
               <div
                 key={`${slot.slotType}-${slot.startTime}`}
                 className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2 py-1.5"
@@ -288,7 +276,7 @@ function MainTabContent({
                   {slot.startTime}-{slot.endTime}
                 </span>
                 <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                  {slotTypeLabel[slot.slotType]}
+                  {getPersonaSlotLabel(parseResult, slot.slotType)}
                 </span>
                 <span className="min-w-0 truncate text-[11px] font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
               </div>
@@ -306,6 +294,18 @@ function MainTabContent({
 
       {/* 5. demo 提示 */}
       <p className="mt-2 text-[10px] leading-4 text-black/42">{guidance.mapDemoNote}</p>
+
+      {/* 为什么适合你这次 */}
+      <div className="mt-2">
+        <p className="mb-1 text-[11px] font-extrabold text-black/62">为什么适合你这次</p>
+        <ul className="space-y-0.5">
+          {summary.reasons.slice(0, 3).map((reason) => (
+            <li key={reason} className="text-[11px] leading-5 text-black/58">
+              · {reason}
+            </li>
+          ))}
+        </ul>
+      </div>
 
       {/* 6. CTA */}
       <div className="mt-3 flex gap-2">
@@ -343,12 +343,14 @@ function DiffChipRow({ chips }: { chips: FallbackPlanDisplay["diffChips"] }) {
 function FallbackCard({
   plan,
   display,
+  parseResult,
   isSelected,
   onViewDetail,
   onSelectPlan,
 }: {
   plan: ItineraryPlan;
   display: FallbackPlanDisplay;
+  parseResult: ParseResult;
   isSelected: boolean;
   onViewDetail: () => void;
   onSelectPlan: () => void;
@@ -356,6 +358,7 @@ function FallbackCard({
   const foodSlot = plan.slots.find((slot) => slot.slotType === "food");
   const activitySlot = plan.slots.find((slot) => slot.slotType === "activity");
   const replaceName = foodSlot?.poi?.name ?? activitySlot?.poi?.name ?? plan.title;
+  const personaFallbackLine = getFallbackPersonaReason(parseResult);
 
   return (
     <div className={`rounded-lg border p-3 ${isSelected ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-meituan-gray/60"}`}>
@@ -369,6 +372,7 @@ function FallbackCard({
         成行分 {display.overallScore} · 稳妥度 {display.safetyScore}
       </p>
       <p className="mt-1 text-[11px] leading-5 text-black/55">{display.summaryLine}</p>
+      <p className="mt-1.5 rounded-md bg-yellow-50 px-2 py-1.5 text-[11px] font-semibold leading-5 text-black/68">{personaFallbackLine}</p>
       <DiffChipRow chips={display.diffChips} />
       <div className="mt-3 space-y-1.5 text-[11px] leading-5 text-black/62">
         <p>
@@ -423,8 +427,7 @@ function FallbackDetailContent({
   onBack: () => void;
   onSelectPlan: () => void;
 }) {
-  const personaType = inferPersona(parseResult);
-  const personaLine = fallbackPersonaCopy[personaType];
+  const personaLine = getFallbackPersonaReason(parseResult);
   const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes);
   const rationaleNotes = plan.slots.flatMap((slot) => slot.rationaleNotes);
   const diff = plan.diffFromMain;
@@ -476,7 +479,7 @@ function FallbackDetailContent({
                     {slot.startTime}-{slot.endTime}
                   </span>
                   <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                    {slotTypeLabel[slot.slotType]}
+                    {getPersonaSlotLabel(parseResult, slot.slotType)}
                   </span>
                   <span className="min-w-0 truncate text-xs font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
                 </div>
@@ -601,6 +604,7 @@ function FallbackTabContent({
             key={plan.id}
             plan={plan}
             display={display}
+            parseResult={parseResult}
             isSelected={selectedPlanTypeIsFallback(selectedFallbackIndex, index)}
             onViewDetail={() => onSelectFallbackDetail(index)}
             onSelectPlan={() => onSelectFallbackPlan(index)}
@@ -616,8 +620,8 @@ function selectedPlanTypeIsFallback(selectedFallbackIndex: number | null, index:
 }
 
 function PoiTabContent({ poi, parseResult, mapSelected }: { poi: ScoredPoi; parseResult: ParseResult; mapSelected: boolean }) {
-  const personaReason = getPersonaConfig(parseResult).poiReason;
-  const sceneReasons = [personaReason, ...poi.reasons.filter((reason) => reason !== personaReason)].slice(0, 3);
+  const personaConfig = getPersonaConfig(parseResult);
+  const sceneReasons = [personaConfig.poiReason, ...poi.reasons.filter((reason) => reason !== personaConfig.poiReason)].slice(0, 3);
 
   return (
     <>
@@ -668,9 +672,17 @@ function PoiTabContent({ poi, parseResult, mapSelected }: { poi: ScoredPoi; pars
       <div className="mt-3">
         <p className="mb-1 text-xs font-extrabold text-black/70">动态可行性</p>
         <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
+          {personaConfig.availabilityHint}
+        </p>
+        <p className="mt-1 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
           ETA {poi.routeEtaMinutes} 分钟 · 排队 {poi.queueMinutes} 分钟 · 人均 {poi.pricePerPerson} 元
           {poi.reservationAvailable ? " · 当前可订" : ""}
         </p>
+      </div>
+
+      <div className="mt-3">
+        <p className="mb-1 text-xs font-extrabold text-black/70">路线衔接</p>
+        <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">{personaConfig.routeLinkHint}</p>
       </div>
 
       {poi.risks.length ? (
@@ -776,6 +788,7 @@ export function BottomPlanSheet({
           <MainTabContent
             summary={currentPlanSummary}
             guidance={routeGuidance}
+            parseResult={parseResult}
             preferenceSummary={preferenceSummary}
             onOpenRoutePreferences={onOpenRoutePreferences}
             switchFeedback={switchFeedback}

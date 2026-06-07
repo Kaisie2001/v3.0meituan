@@ -1,4 +1,4 @@
-import { inferPersona } from "@/lib/persona";
+import { getFallbackPersonaReason } from "@/lib/persona";
 import { buildRouteGuidance } from "@/lib/routeGuidance";
 import type { ParseResult, RoutePlan } from "@/lib/types";
 
@@ -7,15 +7,6 @@ type RouteTimelineProps = {
   parseResult?: ParseResult;
   selectedPlanType?: "main" | "fallback";
   selectedFallbackIndex?: number | null;
-};
-
-const fallbackCopy = {
-  friends: "这个替代方案离集合点更近，减少等人和临时改约成本。",
-  family: "这个替代方案转场更少，更适合带孩子时快速切换。",
-  date: "这个替代方案节奏更松，适合保留聊天和散步时间。",
-  work: "这个替代方案等待更短，不压缩学习/办公/准备时间。",
-  errand: "这个替代方案更顺路，方便先办事再停留或用餐。",
-  casual: "这个替代方案更灵活，适合按排队、天气或心情随时替换。",
 };
 
 export function RouteTimeline({
@@ -37,7 +28,7 @@ export function RouteTimeline({
   const primaryFallback = fallbackPlans[0];
   const hiddenFallbackCount = Math.max(0, fallbackPlans.length - 1);
   const mainSlots = routePlan.mainPlan?.slots ?? [];
-  const fallbackPersonaCopy = parseResult ? fallbackCopy[inferPersona(parseResult)] : "";
+  const fallbackPersonaCopy = parseResult ? getFallbackPersonaReason(parseResult) : "";
   const routeGuidance =
     parseResult && routePlan
       ? buildRouteGuidance({
