@@ -1,6 +1,7 @@
 "use client";
 
-import { getPersonaConfig } from "@/lib/persona";
+import { useEffect, useState } from "react";
+import { getPersonaConfig, inferPersona } from "@/lib/persona";
 import type { ItineraryPlan, ParseResult, RoutePlan, ScoredPoi } from "@/lib/types";
 
 export type SheetTab = "main" | "fallback" | "poi";
@@ -33,6 +34,21 @@ const levelLabel = {
   red: "不建议",
   gray: "不可用",
 };
+
+const fallbackPersonaCopy = {
+  friends: "这个替代方案离集合点更近，减少等人和临时改约成本。",
+  family: "这个替代方案转场更少，更适合带孩子时快速切换。",
+  date: "这个替代方案节奏更松，适合保留聊天和散步时间。",
+  work: "这个替代方案等待更短，不压缩学习/办公/准备时间。",
+  errand: "这个替代方案更顺路，方便先办事再停留或用餐。",
+  casual: "这个替代方案更灵活，适合按排队、天气或心情随时替换。",
+};
+
+function formatDelta(value: number, unit: string) {
+  if (value === 0) return `与主方案相同`;
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value} ${unit}`;
+}
 
 function MainTabContent({
   routePlan,
@@ -127,51 +143,190 @@ function MainTabContent({
   );
 }
 
-function FallbackCard({ plan }: { plan: ItineraryPlan }) {
+function FallbackCard({ plan, onClick }: { plan: ItineraryPlan; onClick: () => void }) {
   const foodSlot = plan.slots.find((slot) => slot.slotType === "food");
-  const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes).slice(0, 2);
+  const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes).slice(0, 1);
 
   return (
-    <div className="rounded-lg border border-black/8 bg-meituan-gray/60 p-3">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full rounded-lg border border-black/8 bg-meituan-gray/60 p-3 text-left transition hover:border-meituan-yellow/50 hover:bg-meituan-gray"
+    >
       <p className="text-sm font-extrabold text-meituan-ink">{plan.title}</p>
       {plan.trigger ? <p className="mt-1 text-xs text-black/55">触发：{plan.trigger}</p> : null}
       <p className="mt-2 text-xs leading-5 text-black/65">
-        替换为 {foodSlot?.poi?.name ?? plan.title}，保留整体节奏，减少临时改约成本。
+        替换为 {foodSlot?.poi?.name ?? plan.title}，点击查看详情
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/55">
         <span className="rounded-full bg-white px-2 py-0.5">耗时 {plan.totalMinutes} 分钟</span>
         <span className="rounded-full bg-white px-2 py-0.5">等待 {plan.totalWaitMinutes} 分钟</span>
         <span className="rounded-full bg-white px-2 py-0.5">预算 {plan.totalBudget} 元</span>
       </div>
-      {plan.diffFromMain ? (
-        <p className="mt-2 text-[11px] text-black/50">
-          较主方案：预算 {plan.diffFromMain.deltaBudget >= 0 ? "+" : ""}
-          {plan.diffFromMain.deltaBudget} 元 · 等待 {plan.diffFromMain.deltaWaitMinutes >= 0 ? "+" : ""}
-          {plan.diffFromMain.deltaWaitMinutes} 分钟 · 通勤 {plan.diffFromMain.deltaCommuteMinutes >= 0 ? "+" : ""}
-          {plan.diffFromMain.deltaCommuteMinutes} 分钟
-        </p>
-      ) : null}
       {riskNotes.length ? (
-        <p className="mt-2 rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">风险：{riskNotes.join(" / ")}</p>
+        <p className="mt-2 rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">风险：{riskNotes[0]}</p>
       ) : null}
-      <button type="button" className="mt-3 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black/62">
-        选择此备选
-      </button>
-    </div>
+      <p className="mt-2 text-[11px] font-bold text-meituan-ink/70">点击查看详情 →</p>
+    </button>
   );
 }
 
-function FallbackTabContent({ routePlan }: { routePlan: RoutePlan }) {
+function FallbackDetailContent({
+  plan,
+  parseResult,
+  mainPlanMinutes,
+  onBack,
+}: {
+  plan: ItineraryPlan;
+  parseResult: ParseResult;
+  mainPlanMinutes?: number;
+  onBack: () => void;
+}) {
+  const personaType = inferPersona(parseResult);
+  const personaLine = fallbackPersonaCopy[personaType];
+  const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes);
+  const rationaleNotes = plan.slots.flatMap((slot) => slot.rationaleNotes);
+  const diff = plan.diffFromMain;
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-3 flex items-center gap-1 text-sm font-bold text-black/62 transition hover:text-black/85"
+      >
+        <span aria-hidden="true">←</span>
+        返回备选列表
+      </button>
+
+      <h3 className="text-base font-extrabold text-meituan-ink">{plan.title}</h3>
+
+      <div className="mt-3 space-y-3">
+        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+          <p className="text-xs font-extrabold text-black/70">触发原因</p>
+          <p className="mt-1 text-xs leading-5 text-black/65">{plan.trigger ?? "主方案临时不可行时启用"}</p>
+        </div>
+
+        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+          <p className="text-xs font-extrabold text-black/70">替换节点</p>
+          <div className="mt-2 space-y-1.5">
+            {plan.slots.map((slot) => (
+              <div key={`${slot.slotType}-${slot.startTime}`} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2">
+                <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">
+                  {slot.startTime}-{slot.endTime}
+                </span>
+                <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
+                  {slotTypeLabel[slot.slotType]}
+                </span>
+                <span className="min-w-0 truncate text-xs font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+          <p className="text-xs font-extrabold text-black/70">替换地点</p>
+          <ul className="mt-1 space-y-1 text-xs text-black/65">
+            {plan.slots.map((slot) => (
+              <li key={`place-${slot.slotType}-${slot.startTime}`}>
+                {slotTypeLabel[slot.slotType]}：{slot.poi?.name ?? "待定地点"}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 text-xs">
+          <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+            <p className="font-extrabold text-black/70">时间变化</p>
+            <p className="mt-1 text-black/65">
+              总耗时 {plan.totalMinutes} 分钟
+              {typeof mainPlanMinutes === "number" ? `（主方案 ${mainPlanMinutes} 分钟）` : ""}
+            </p>
+            {diff ? <p className="mt-1 text-black/55">通勤变化：{formatDelta(diff.deltaCommuteMinutes, "分钟")}</p> : null}
+          </div>
+          <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+            <p className="font-extrabold text-black/70">等待变化</p>
+            <p className="mt-1 text-black/65">预计等待 {plan.totalWaitMinutes} 分钟</p>
+            {diff ? <p className="mt-1 text-black/55">较主方案：{formatDelta(diff.deltaWaitMinutes, "分钟")}</p> : null}
+          </div>
+          <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+            <p className="font-extrabold text-black/70">预算变化</p>
+            <p className="mt-1 text-black/65">预计预算 {plan.totalBudget} 元</p>
+            {diff ? <p className="mt-1 text-black/55">较主方案：{formatDelta(diff.deltaBudget, "元")}</p> : null}
+          </div>
+        </div>
+
+        {riskNotes.length ? (
+          <div className="rounded-lg bg-rose-50 px-3 py-2.5">
+            <p className="text-xs font-extrabold text-rose-900">风险提示</p>
+            <ul className="mt-1 space-y-1">
+              {riskNotes.map((note) => (
+                <li key={note} className="text-xs text-rose-800">
+                  {note}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
+          <p className="text-xs font-extrabold text-black/70">为什么适合当前出行画像</p>
+          <p className="mt-1 text-xs leading-5 text-black/65">{personaLine}</p>
+          {rationaleNotes.length ? (
+            <ul className="mt-2 space-y-1">
+              {rationaleNotes.slice(0, 3).map((note) => (
+                <li key={note} className="rounded-md bg-white px-2 py-1.5 text-xs text-black/62">
+                  {note}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+
+      <button type="button" className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62">
+        选择此备选
+      </button>
+    </>
+  );
+}
+
+function FallbackTabContent({
+  routePlan,
+  parseResult,
+  selectedFallbackIndex,
+  onSelectFallback,
+  onBackToList,
+}: {
+  routePlan: RoutePlan;
+  parseResult: ParseResult;
+  selectedFallbackIndex: number | null;
+  onSelectFallback: (index: number) => void;
+  onBackToList: () => void;
+}) {
   const fallbackPlans = routePlan.fallbackPlans ?? [];
 
   if (!fallbackPlans.length) {
     return <p className="py-6 text-center text-sm text-black/55">暂无备选方案</p>;
   }
 
+  const selectedPlan = selectedFallbackIndex !== null ? fallbackPlans[selectedFallbackIndex] : undefined;
+
+  if (selectedPlan) {
+    return (
+      <FallbackDetailContent
+        plan={selectedPlan}
+        parseResult={parseResult}
+        mainPlanMinutes={routePlan.mainPlan?.totalMinutes}
+        onBack={onBackToList}
+      />
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {fallbackPlans.map((plan) => (
-        <FallbackCard key={plan.id} plan={plan} />
+      {fallbackPlans.map((plan, index) => (
+        <FallbackCard key={plan.id} plan={plan} onClick={() => onSelectFallback(index)} />
       ))}
     </div>
   );
@@ -261,6 +416,13 @@ export function BottomPlanSheet({
   onConfirmExecute,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
+  const [selectedFallbackIndex, setSelectedFallbackIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== "fallback") {
+      setSelectedFallbackIndex(null);
+    }
+  }, [activeTab]);
 
   return (
     <div className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden">
@@ -273,7 +435,10 @@ export function BottomPlanSheet({
             <button
               key={tab.id}
               type="button"
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => {
+                if (tab.id !== "fallback") setSelectedFallbackIndex(null);
+                onTabChange(tab.id);
+              }}
               className={`flex-1 rounded-t-lg px-2 py-2 text-xs font-bold transition ${
                 active ? "bg-meituan-yellow/20 text-meituan-ink" : "text-black/45 hover:text-black/65"
               }`}
@@ -291,11 +456,22 @@ export function BottomPlanSheet({
             rankedPois={rankedPois}
             parseResult={parseResult}
             onConfirmExecute={onConfirmExecute}
-            onViewFallback={() => onTabChange("fallback")}
+            onViewFallback={() => {
+              setSelectedFallbackIndex(null);
+              onTabChange("fallback");
+            }}
           />
         ) : null}
 
-        {activeTab === "fallback" ? <FallbackTabContent routePlan={routePlan} /> : null}
+        {activeTab === "fallback" ? (
+          <FallbackTabContent
+            routePlan={routePlan}
+            parseResult={parseResult}
+            selectedFallbackIndex={selectedFallbackIndex}
+            onSelectFallback={setSelectedFallbackIndex}
+            onBackToList={() => setSelectedFallbackIndex(null)}
+          />
+        ) : null}
 
         {activeTab === "poi" ? (
           displayPoi ? (
