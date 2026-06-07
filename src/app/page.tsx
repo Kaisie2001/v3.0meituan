@@ -24,6 +24,7 @@ import {
   travelSettingsToPreferencePayload,
   type TravelSettings,
 } from "@/lib/preferenceSummary";
+import { buildExecutionPlanLabel, buildSelectedPlanSummary } from "@/lib/executionContext";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
 type AppScreen = "input" | "result" | "details" | "execute";
@@ -66,12 +67,21 @@ export default function Home() {
 
   const travelSettingsSummary = useMemo(() => buildTravelSettingsSummary(travelSettings), [travelSettings]);
 
-  const executionPlanLabel = useMemo(() => {
-    if (selectedPlanType === "fallback" && selectedFallbackIndex !== null) {
-      return result.routePlan.fallbackPlans?.[selectedFallbackIndex]?.title ?? "备选方案";
-    }
-    return "主方案";
-  }, [result.routePlan.fallbackPlans, selectedPlanType, selectedFallbackIndex]);
+  const executionPlanLabel = useMemo(
+    () => buildExecutionPlanLabel(result.routePlan, selectedPlanType, selectedFallbackIndex),
+    [result.routePlan, selectedPlanType, selectedFallbackIndex],
+  );
+
+  const selectedPlanSummary = useMemo(
+    () =>
+      buildSelectedPlanSummary({
+        routePlan: result.routePlan,
+        selectedPlanType,
+        selectedFallbackIndex,
+        travelSettings,
+      }),
+    [result.routePlan, selectedPlanType, selectedFallbackIndex, travelSettings],
+  );
 
   useEffect(() => {
     if (selectedPlanType !== "fallback") return;
@@ -311,10 +321,13 @@ export default function Home() {
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
                 <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
                 <ExecutionPanel
-                  actions={result.executionActions}
                   routePlan={result.routePlan}
                   intent={result.parseResult.intent}
-                  selectedPlanLabel={executionPlanLabel}
+                  selectedPlanType={selectedPlanType}
+                  selectedFallbackIndex={selectedFallbackIndex}
+                  travelSettings={travelSettings}
+                  currentPlanLabel={executionPlanLabel}
+                  selectedPlanSummary={selectedPlanSummary}
                 />
               </div>
             ) : null}

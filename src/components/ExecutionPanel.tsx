@@ -1,26 +1,30 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { ExecutionAction, ExecutionTraceStep, Intent, RoutePlan } from "@/lib/types";
+import {
+  buildContextualDoneSummary,
+  buildContextualIdleActions,
+  buildContextualRunningSteps,
+  buildEnhancedShareText,
+  buildTraceFoldSummary,
+  type SelectedPlanSummary,
+  type SelectedPlanType,
+} from "@/lib/executionContext";
+import type { TravelSettings } from "@/lib/preferenceSummary";
+import type { ExecutionTraceStep, Intent, RoutePlan } from "@/lib/types";
 import { executePlan } from "@/lib/executor/executePlan";
 
 type ExecutionPanelProps = {
-  actions: ExecutionAction[];
   routePlan?: RoutePlan;
   intent: Intent;
-  selectedPlanLabel?: string;
+  selectedPlanType: SelectedPlanType;
+  selectedFallbackIndex: number | null;
+  travelSettings: TravelSettings;
+  currentPlanLabel: string;
+  selectedPlanSummary: SelectedPlanSummary;
 };
 
 type ExecutionStatus = "idle" | "running" | "done";
-
-const defaultActions: ExecutionAction[] = [
-  { id: "check", label: "检查可订状态" },
-  { id: "lock", label: "锁定餐厅/活动名额" },
-  { id: "route", label: "生成路线" },
-  { id: "share", label: "生成可转发文案" },
-];
-
-const runningSteps = ["正在检查可订状态", "正在锁定座位/票券", "正在生成路线", "正在生成分享文案"];
 
 const RUNNING_STEP_MS = 450;
 
@@ -54,26 +58,6 @@ function collectReceiptIds(trace: ExecutionTraceStep[]) {
   return ids;
 }
 
-function buildDoneSummary(trace: ExecutionTraceStep[], hasRoutePlan: boolean) {
-  const ids = collectReceiptIds(trace);
-  const items: string[] = [];
-
-  if (ids.reservationId || trace.some((s) => s.toolName === "ReserveTable" && s.status === "success")) {
-    items.push("已完成订座");
-  }
-  if (ids.orderId || ids.ticketId || trace.some((s) => (s.toolName === "PlaceOrder" || s.toolName === "BookTickets") && s.status === "success")) {
-    items.push("已完成下单/购券");
-  }
-  if (ids.routeId || hasRoutePlan) {
-    items.push("已生成路线");
-  }
-  if (trace.some((s) => s.toolName === "GenerateShareText" && s.status === "success")) {
-    items.push("已生成可转发文案");
-  }
-
-  return items.length ? items : ["方案已执行完成"];
-}
-
 async function copyTextSafely(text: string) {
   try {
     const permission = await navigator.permissions?.query?.({ name: "clipboard-write" as PermissionName });
@@ -105,7 +89,15 @@ function delay(ms: number) {
   });
 }
 
-export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel = "主方案" }: ExecutionPanelProps) {
+export function ExecutionPanel({
+  routePlan,
+  intent,
+  selectedPlanType,
+  selectedFallbackIndex,
+  travelSettings,
+  currentPlanLabel,
+  selectedPlanSummary,
+}: ExecutionPanelProps) {
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>("idle");
   const [runningStep, setRunningStep] = useState(0);
   const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
@@ -113,11 +105,42 @@ export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel =
   const [traceOpen, setTraceOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const actionItems = actions.length ? actions : defaultActions;
+  const idleActions = useMemo(
+    () => buildContextualIdleActions({ travelSettings, selectedPlanType }),
+    [travelSettings, selectedPlanType],
+  );
+
+  const { steps: runningSteps, hints: runningHints } = useMemo(
+    () => buildContextualRunningSteps({ travelSettings, selectedPlanType }),
+    [travelSettings, selectedPlanType],
+  );
+
+  const traceFoldSummary = useMemo(() => buildTraceFoldSummary(selectedPlanType), [selectedPlanType]);
+
   const receiptIds = useMemo(() => collectReceiptIds(trace), [trace]);
-  const doneSummary = useMemo(() => buildDoneSummary(trace, Boolean(routePlan)), [trace, routePlan]);
+
+  const doneSummary = useMemo(() => {
+    const traceHasReservation = trace.some((step) => step.toolName === "ReserveTable" && step.status === "success");
+    const traceHasOrder = trace.some(
+      (step) => (step.toolName === "PlaceOrder" || step.toolName === "BookTickets") && step.status === "success",
+    );
+    return buildContextualDoneSummary({
+      selectedPlanType,
+      currentPlanLabel,
+      hasShareText: Boolean(shareText),
+      hasRoutePlan: Boolean(routePlan),
+      traceHasReservation,
+      traceHasOrder,
+    });
+  }, [trace, routePlan, selectedPlanType, currentPlanLabel, shareText]);
+
   const completedTraceCount = trace.filter((step) => step.status === "success").length;
-  const progressPercent = executionStatus === "running" ? Math.round(((runningStep + 1) / runningSteps.length) * 100) : executionStatus === "done" ? 100 : 0;
+  const progressPercent =
+    executionStatus === "running"
+      ? Math.round(((runningStep + 1) / runningSteps.length) * 100)
+      : executionStatus === "done"
+        ? 100
+        : 0;
 
   async function handleExecute() {
     if (!routePlan || executionStatus === "running") return;
@@ -138,10 +161,18 @@ export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel =
 
     const result = await executePromise;
     const shareStep = result.find((step) => step.toolName === "GenerateShareText" && step.status === "success");
-    const text = (shareStep?.response as { shareText?: string } | undefined)?.shareText ?? "";
+    const originalShareText = (shareStep?.response as { shareText?: string } | undefined)?.shareText ?? "";
+    const enhancedShareText = buildEnhancedShareText({
+      originalShareText,
+      travelSettings,
+      currentPlanLabel,
+      selectedPlanType,
+      routePlan,
+      selectedFallbackIndex,
+    });
 
     setTrace(result);
-    setShareText(text);
+    setShareText(enhancedShareText);
     setExecutionStatus("done");
   }
 
@@ -156,14 +187,22 @@ export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel =
 
   return (
     <section className="rounded-2xl border border-black/8 bg-white p-4 shadow-soft">
+      <div className="rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
+        <p className="text-xs font-bold text-black/45">将执行</p>
+        <p className="mt-0.5 text-sm font-extrabold text-meituan-ink">{currentPlanLabel}</p>
+        <p className="mt-1 text-[11px] font-semibold leading-5 text-black/62">{selectedPlanSummary.travelSummary}</p>
+        {selectedPlanSummary.planNote ? (
+          <p className="mt-1 text-[11px] leading-5 text-amber-900">{selectedPlanSummary.planNote}</p>
+        ) : null}
+      </div>
+
       {executionStatus === "idle" ? (
         <div>
-          <p className="rounded-lg bg-meituan-yellow/15 px-3 py-2 text-sm font-extrabold text-meituan-ink">将执行：{selectedPlanLabel}</p>
           <h2 className="mt-4 text-lg font-extrabold text-meituan-ink">确认并执行</h2>
-          <p className="mt-1 text-sm text-black/58">AI 将模拟完成订座、下单、路线生成和计划发送。</p>
+          <p className="mt-1 text-sm text-black/58">AI 将按当前出行设置模拟完成订座、转场与计划发送。</p>
 
           <ul className="mt-4 space-y-2">
-            {actionItems.map((action) => (
+            {idleActions.map((action) => (
               <li key={action.id} className="flex items-center gap-2 rounded-lg bg-meituan-gray/80 px-3 py-2 text-sm text-black/70">
                 <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-meituan-yellow/70 text-[10px] font-bold text-meituan-ink">✓</span>
                 {action.label}
@@ -184,16 +223,22 @@ export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel =
 
       {executionStatus === "running" ? (
         <div>
-          <div className="flex items-start gap-3">
+          <div className="mt-4 flex items-start gap-3">
             <div className="relative mt-0.5 h-10 w-10 shrink-0">
               <div className="absolute inset-0 rounded-full border-2 border-meituan-yellow/30" />
               <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-meituan-yellow" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-meituan-ink">正在执行方案</h2>
-              <p className="mt-1 text-sm text-black/55">请稍候，正在为你完成订座与路线安排。</p>
+              <h2 className="text-lg font-extrabold text-meituan-ink">正在执行{currentPlanLabel}</h2>
+              <p className="mt-1 text-sm text-black/55">请稍候，正在按当前出行设置完成订座与路线安排。</p>
             </div>
           </div>
+
+          {runningHints.map((hint) => (
+            <p key={hint} className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
+              {hint}
+            </p>
+          ))}
 
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/8">
             <div className="h-full rounded-full bg-meituan-yellow transition-all duration-300" style={{ width: `${progressPercent}%` }} />
@@ -227,7 +272,7 @@ export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel =
 
       {executionStatus === "done" ? (
         <div>
-          <div className="flex items-center gap-2">
+          <div className="mt-4 flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-sm font-bold text-white">✓</span>
             <h2 className="text-lg font-extrabold text-meituan-ink">执行完成</h2>
           </div>
@@ -277,9 +322,7 @@ export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel =
         >
           <span>
             <span className="block text-sm font-extrabold text-black/78">查看工具调用记录</span>
-            <span className="mt-1 block text-xs leading-5 text-black/50">
-              包含可订检查、排队判断、订座/下单、路线生成和消息发送等 mock tool 调用。
-            </span>
+            <span className="mt-1 block text-xs leading-5 text-black/50">{traceFoldSummary}</span>
             {trace.length ? (
               <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已完成 {completedTraceCount} 项调用</span>
             ) : null}
