@@ -2,12 +2,6 @@
 
 import { useState } from "react";
 import { defaultInputs } from "@/lib/parseIntent";
-import {
-  DEPARTURE_CHIP_OPTIONS,
-  DURATION_CHIP_OPTIONS,
-  type DepartureChip,
-  type DurationChip,
-} from "@/lib/preferenceSummary";
 
 const exampleGoals = [
   "今天下午2点有3小时空，帮我安排一个轻松活动，通勤30分钟内",
@@ -21,58 +15,26 @@ type InputPanelProps = {
   wechat: string;
   seed: string;
   loading: boolean;
-  departureChip: DepartureChip | null;
-  durationChip: DurationChip | null;
-  customStartTime: string;
+  timeSummary: string;
   onGoalChange: (value: string) => void;
   onWechatChange: (value: string) => void;
   onSeedChange: (value: string) => void;
-  onDepartureChipChange: (value: DepartureChip | null) => void;
-  onDurationChipChange: (value: DurationChip | null) => void;
-  onCustomStartTimeChange: (value: string) => void;
+  onOpenTimePicker: () => void;
   onGenerate: () => void;
   onOpenRoutePreferences?: () => void;
   hasRoutePreferences?: boolean;
 };
-
-function SelectChip({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-        active
-          ? "bg-meituan-yellow text-meituan-ink shadow-sm"
-          : "border border-black/10 bg-white text-black/62 hover:border-meituan-yellow/60 hover:bg-yellow-50/50"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
 
 export function InputPanel({
   goal,
   wechat,
   seed,
   loading,
-  departureChip,
-  durationChip,
-  customStartTime,
+  timeSummary,
   onGoalChange,
   onWechatChange,
   onSeedChange,
-  onDepartureChipChange,
-  onDurationChipChange,
-  onCustomStartTimeChange,
+  onOpenTimePicker,
   onGenerate,
   onOpenRoutePreferences,
   hasRoutePreferences,
@@ -114,47 +76,21 @@ export function InputPanel({
             className="h-28 w-full resize-none rounded-lg border border-black/10 bg-meituan-gray p-3 text-sm leading-6 outline-none transition focus:border-meituan-yellow focus:bg-white"
             value={goal}
             onChange={(event) => onGoalChange(event.target.value)}
-            placeholder="比如：今天下午有3小时空，帮我安排一个轻松活动"
+            placeholder="比如：想找个地方轻松待一下，晚点和朋友吃饭"
           />
         </label>
 
-        <div className="space-y-2.5 rounded-lg border border-black/8 bg-meituan-gray/40 px-3 py-2.5">
-          <div>
-            <p className="mb-1.5 text-xs font-bold text-black/62">什么时候出发？</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DEPARTURE_CHIP_OPTIONS.map((option) => (
-                <SelectChip
-                  key={option.id}
-                  label={option.label}
-                  active={departureChip === option.id}
-                  onClick={() => onDepartureChipChange(departureChip === option.id ? null : option.id)}
-                />
-              ))}
-            </div>
-            {departureChip === "custom" ? (
-              <input
-                className="mt-2 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-semibold text-black/75 outline-none focus:border-meituan-yellow"
-                value={customStartTime}
-                onChange={(event) => onCustomStartTimeChange(event.target.value)}
-                placeholder="例如 14:00"
-                inputMode="numeric"
-              />
-            ) : null}
-          </div>
-          <div>
-            <p className="mb-1.5 text-xs font-bold text-black/62">计划玩多久？</p>
-            <div className="flex flex-wrap gap-1.5">
-              {DURATION_CHIP_OPTIONS.map((option) => (
-                <SelectChip
-                  key={option.id}
-                  label={option.label}
-                  active={durationChip === option.id}
-                  onClick={() => onDurationChipChange(durationChip === option.id ? null : option.id)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={onOpenTimePicker}
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5 text-left transition hover:border-meituan-yellow/60 hover:bg-yellow-50/40"
+        >
+          <span className="min-w-0">
+            <span className="block text-xs font-bold text-black/45">出行时间</span>
+            <span className="mt-0.5 block truncate text-sm font-extrabold text-meituan-ink">{timeSummary}</span>
+          </span>
+          <span className="shrink-0 text-xs font-bold text-meituan-ink">修改</span>
+        </button>
 
         <button
           className="h-12 w-full rounded-lg bg-meituan-yellow px-6 text-sm font-bold text-meituan-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:justify-self-start"

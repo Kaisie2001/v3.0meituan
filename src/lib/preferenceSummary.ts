@@ -4,23 +4,34 @@ export const DEFAULT_PREFERENCE_SUMMARY = "系统按时间、距离、排队风�
 
 export const DEFAULT_TIME_WINDOW_SUMMARY = "时间未明确 · 系统按默认短时活动规划";
 
-export type DepartureChip = "now" | "afternoon" | "tonight" | "weekend" | "custom";
-export type DurationChip = "2h" | "3h" | "4h" | "halfday";
+export type TripDateOption = "today" | "tomorrow" | "saturday" | "sunday";
+export type TripDurationOption = "2h" | "3h" | "4h" | "halfday";
 
-export const DEPARTURE_CHIP_OPTIONS: { id: DepartureChip; label: string }[] = [
-  { id: "now", label: "现在" },
-  { id: "afternoon", label: "今天下午" },
-  { id: "tonight", label: "今晚" },
-  { id: "weekend", label: "周末下午" },
-  { id: "custom", label: "自定义" },
+export type TimePickerValue = {
+  date: TripDateOption;
+  startTime: string;
+  duration: TripDurationOption;
+};
+
+export const DATE_OPTIONS: { id: TripDateOption; label: string }[] = [
+  { id: "today", label: "今天" },
+  { id: "tomorrow", label: "明天" },
+  { id: "saturday", label: "周六" },
+  { id: "sunday", label: "周日" },
 ];
 
-export const DURATION_CHIP_OPTIONS: { id: DurationChip; label: string }[] = [
+export const DURATION_OPTIONS: { id: TripDurationOption; label: string }[] = [
   { id: "2h", label: "2小时" },
   { id: "3h", label: "3小时" },
   { id: "4h", label: "4小时" },
   { id: "halfday", label: "半天" },
 ];
+
+export const DEFAULT_TIME_PICKER: TimePickerValue = {
+  date: "today",
+  startTime: "14:00",
+  duration: "3h",
+};
 
 export type PreferenceSubmitPayload = {
   routePrefs: RoutePreferences;
@@ -86,39 +97,29 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function normalizeCustomTime(value: string) {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-    return null;
-  }
-  return `${pad2(hour)}:${pad2(minute)}`;
-}
-
-export function departureChipToStartTime(chip: DepartureChip, customTime = "14:00") {
-  switch (chip) {
-    case "now": {
-      const now = new Date();
-      return `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+export function buildTimeSlotOptions(startHour = 9, endHour = 22, stepMinutes = 30) {
+  const slots: string[] = [];
+  for (let hour = startHour; hour <= endHour; hour += 1) {
+    for (let minute = 0; minute < 60; minute += stepMinutes) {
+      if (hour === endHour && minute > 0) break;
+      slots.push(`${pad2(hour)}:${pad2(minute)}`);
     }
-    case "afternoon":
-      return "14:00";
-    case "tonight":
-      return "18:00";
-    case "weekend":
-      return "14:00";
-    case "custom":
-      return normalizeCustomTime(customTime) ?? "14:00";
-    default:
-      return "14:00";
   }
+  return slots;
 }
 
-export function durationChipToMinutes(chip: DurationChip) {
-  switch (chip) {
+export const TIME_SLOT_OPTIONS = buildTimeSlotOptions();
+
+export function getDateLabel(date: TripDateOption) {
+  return DATE_OPTIONS.find((option) => option.id === date)?.label ?? "今天";
+}
+
+export function getDurationLabel(duration: TripDurationOption) {
+  return DURATION_OPTIONS.find((option) => option.id === duration)?.label ?? "3小时";
+}
+
+export function durationToMinutes(duration: TripDurationOption) {
+  switch (duration) {
     case "2h":
       return 120;
     case "3h":
@@ -132,15 +133,50 @@ export function durationChipToMinutes(chip: DurationChip) {
   }
 }
 
-export function getDepartureChipLabel(chip: DepartureChip | null) {
-  if (!chip) return null;
-  if (chip === "custom") return "自定义";
-  return DEPARTURE_CHIP_OPTIONS.find((option) => option.id === chip)?.label ?? null;
+export function inferDefaultStartTime(goalText = "") {
+  if (/晚饭|晚上|今晚|夜间|聚餐/.test(goalText)) return "18:30";
+  return "14:00";
 }
 
-export function getDurationChipLabel(chip: DurationChip | null) {
-  if (!chip) return null;
-  return DURATION_CHIP_OPTIONS.find((option) => option.id === chip)?.label ?? null;
+export function buildTimePickerCardSummary(value: TimePickerValue) {
+  return `${getDateLabel(value.date)} ${value.startTime} 出发 · ${getDurationLabel(value.duration)}`;
+}
+
+function timeToParseablePhrase(value: TimePickerValue) {
+  const [hourRaw, minuteRaw] = value.startTime.split(":").map(Number);
+  if (!Number.isFinite(hourRaw) || !Number.isFinite(minuteRaw)) {
+    return `${getDateLabel(value.date)}14点出发`;
+  }
+
+  let period = "上午";
+  let hour12 = hourRaw;
+  if (hourRaw >= 18) {
+    period = "晚上";
+    hour12 = hourRaw > 12 ? hourRaw - 12 : hourRaw;
+  } else if (hourRaw >= 12) {
+    period = "下午";
+    hour12 = hourRaw === 12 ? 12 : hourRaw - 12;
+  } else if (hourRaw < 5) {
+    period = "凌晨";
+  }
+
+  const minutePart = minuteRaw > 0 ? `${minuteRaw}分` : "";
+  return `${getDateLabel(value.date)}${period}${hour12}点${minutePart}出发`;
+}
+
+export function buildTimeGoalSuffix(value: TimePickerValue) {
+  const durationText = getDurationLabel(value.duration);
+  return `出发时间：${getDateLabel(value.date)} ${value.startTime}；可用时长：${durationText}。`;
+}
+
+export function buildGoalWithTimeContext(goal: string, value: TimePickerValue) {
+  const trimmed = goal.trim();
+  const formalSuffix = buildTimeGoalSuffix(value);
+  const parseableClause = `${timeToParseablePhrase(value)}，计划玩${getDurationLabel(value.duration)}`;
+  if (!trimmed) {
+    return `${formalSuffix}${parseableClause}。`;
+  }
+  return `${trimmed}。${formalSuffix}${parseableClause}。`;
 }
 
 export function inferDepartureLabelFromParse(parseResult: ParseResult) {
@@ -148,10 +184,10 @@ export function inferDepartureLabelFromParse(parseResult: ParseResult) {
   if (!startTime) return null;
 
   const text = `${parseResult.intent.rawGoal} ${parseResult.intent.wechatConstraint}`;
-  if (/周末/.test(text)) return "周末下午";
-  if (/今晚|晚上|夜间/.test(text)) return "今晚";
-  if (/下午/.test(text)) return "今天下午";
-  if (/现在|马上|立刻/.test(text)) return "现在";
+  if (/周末|周六|周日/.test(text)) return `周末 ${startTime}`;
+  if (/明天/.test(text)) return `明天 ${startTime}`;
+  if (/今晚|晚上|夜间/.test(text)) return `今晚 ${startTime}`;
+  if (/今天|下午/.test(text)) return `今天 ${startTime}`;
   return `${startTime} 出发`;
 }
 
@@ -172,21 +208,6 @@ export function hasExplicitTimeWindowFromParse(parseResult: ParseResult) {
   const hasStart = Boolean(startTime) && !missing.includes("startTime");
   const hasDuration = Boolean(durationMinutes) && !missing.includes("durationMinutes");
   return hasStart && hasDuration;
-}
-
-export function buildChipTimePatch(params: {
-  departureChip: DepartureChip | null;
-  durationChip: DurationChip | null;
-  customStartTime?: string;
-}) {
-  const patch: { startTime?: string; durationMinutes?: number } = {};
-  if (params.departureChip) {
-    patch.startTime = departureChipToStartTime(params.departureChip, params.customStartTime);
-  }
-  if (params.durationChip) {
-    patch.durationMinutes = durationChipToMinutes(params.durationChip);
-  }
-  return patch;
 }
 
 export function buildResultStatusSummary(params: {
@@ -211,31 +232,16 @@ export function buildResultStatusSummary(params: {
 }
 
 export function buildTimeWindowSummary(params: {
-  parseResult: ParseResult;
-  departureChip: DepartureChip | null;
-  durationChip: DurationChip | null;
-  customStartTime?: string;
+  timePicker: TimePickerValue;
   preferenceSummary?: string;
 }) {
-  const departureLabel =
-    params.departureChip != null
-      ? params.departureChip === "custom"
-        ? `${normalizeCustomTime(params.customStartTime ?? "") ?? params.customStartTime ?? "14:00"} 出发`
-        : getDepartureChipLabel(params.departureChip)
-      : inferDepartureLabelFromParse(params.parseResult);
-
-  const durationLabel =
-    params.durationChip != null
-      ? getDurationChipLabel(params.durationChip)
-      : inferDurationLabelFromMinutes(params.parseResult.draft.durationMinutes ?? params.parseResult.intent.durationMinutes);
-
-  const hasExplicitTimeWindow =
-    Boolean(params.departureChip && params.durationChip) || hasExplicitTimeWindowFromParse(params.parseResult);
+  const departureLabel = `${getDateLabel(params.timePicker.date)} ${params.timePicker.startTime}`;
+  const durationLabel = getDurationLabel(params.timePicker.duration);
 
   return buildResultStatusSummary({
     departureLabel,
     durationLabel,
     preferenceSummary: params.preferenceSummary,
-    hasExplicitTimeWindow,
+    hasExplicitTimeWindow: true,
   });
 }
