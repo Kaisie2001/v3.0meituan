@@ -9,6 +9,7 @@ import { IntentSummary } from "@/components/IntentSummary";
 import { PoiDetailPanel } from "@/components/PoiDetailPanel";
 import { RecommendationPanel } from "@/components/RecommendationPanel";
 import { RouteTimeline } from "@/components/RouteTimeline";
+import { TripPersonaCard } from "@/components/TripPersonaCard";
 import { ClarifyModal } from "@/components/ClarifyModal";
 import { RoutePreferenceModal } from "@/components/RoutePreferenceModal";
 import { defaultInputs } from "@/lib/parseIntent";
@@ -141,6 +142,7 @@ export default function Home() {
       />
 
       <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
+      <TripPersonaCard parseResult={result.parseResult} />
       <IntentSummary parseResult={result.parseResult} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
