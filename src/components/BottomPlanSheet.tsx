@@ -169,22 +169,26 @@ function buildCurrentPlanSummary(
 
 function RouteGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
   return (
-    <div className="mt-3 rounded-lg border border-black/8 bg-white px-3 py-2.5">
+    <div className="rounded-xl border-2 border-meituan-yellow/80 bg-meituan-yellow/15 px-3 py-2.5 shadow-sm">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-extrabold text-black/70">{guidance.title}</p>
-        <span className="shrink-0 rounded-full bg-meituan-yellow/25 px-2 py-0.5 text-[10px] font-bold text-meituan-ink">
+        <p className="text-sm font-extrabold text-meituan-ink">{guidance.title}</p>
+        <span className="shrink-0 rounded-full bg-meituan-yellow px-2 py-0.5 text-[10px] font-extrabold text-meituan-ink">
           {guidance.transportLabel}
         </span>
       </div>
-      <ul className="mt-2 space-y-1">
-        {guidance.steps.map((step) => (
-          <li key={step} className="flex gap-1.5 text-[11px] leading-5 text-black/62">
-            <span className="shrink-0 text-black/35">·</span>
-            <span>{step}</span>
+      {guidance.fallbackNote ? (
+        <p className="mt-1.5 text-[11px] font-bold leading-5 text-emerald-800">{guidance.fallbackNote}</p>
+      ) : null}
+      <ol className="mt-2 space-y-1.5">
+        {guidance.steps.map((step, index) => (
+          <li key={`${index}-${step}`} className="flex gap-2 text-xs font-semibold leading-5 text-black/78">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-meituan-yellow text-[10px] font-extrabold text-meituan-ink">
+              {index + 1}
+            </span>
+            <span className="min-w-0 pt-0.5">{step}</span>
           </li>
         ))}
-      </ul>
-      <p className="mt-2 border-t border-black/6 pt-2 text-[10px] leading-4 text-black/45">{guidance.mapDemoNote}</p>
+      </ol>
     </div>
   );
 }
@@ -208,19 +212,34 @@ function MainTabContent({
   onViewFallback: () => void;
   onSelectMainPlan: () => void;
 }) {
+  const displaySlots = summary.slots.slice(0, 2);
+  const prefText = preferenceSummary ?? "系统综合推荐 · 按时间、距离、排队风险综合规划";
+
   return (
     <>
       {switchFeedback ? (
-        <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
+        <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
       ) : null}
 
-      <div className="mb-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
+      {/* 1. 当前方案状态 */}
+      <div className="mb-2.5 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-bold text-black/45">当前规划约束</p>
-            <p className="mt-0.5 text-xs leading-5 text-black/65">{preferenceSummary ?? "系统按时间、距离、排队风险综合规划"}</p>
+            <p className="text-sm font-extrabold text-meituan-ink">{summary.usageLabel}</p>
+            <p className="mt-1 text-[11px] leading-5 text-black/55">
+              <span className="font-bold text-black/62">偏好摘要：</span>
+              {prefText}
+            </p>
           </div>
-          {onOpenRoutePreferences ? (
+          {summary.isFallback ? (
+            <button
+              type="button"
+              onClick={onSelectMainPlan}
+              className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+            >
+              恢复主方案
+            </button>
+          ) : onOpenRoutePreferences ? (
             <button
               type="button"
               onClick={() => onOpenRoutePreferences?.()}
@@ -232,130 +251,64 @@ function MainTabContent({
         </div>
       </div>
 
-      <div className="mb-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-extrabold text-meituan-ink">{summary.usageLabel}</p>
-            {summary.isFallback && summary.triggerNote ? (
-              <p className="mt-1 text-[11px] leading-5 text-black/60">{summary.triggerNote}</p>
-            ) : null}
-          </div>
-          {summary.isFallback ? (
-            <button
-              type="button"
-              onClick={onSelectMainPlan}
-              className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
-            >
-              恢复主方案
-            </button>
-          ) : null}
+      {/* 2. 核心指标 */}
+      <div className="mb-2.5 grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
+        <div className="rounded-lg bg-meituan-yellow/75 px-1 py-1.5">
+          <b className="block text-sm font-extrabold text-meituan-ink">{summary.overallScore}</b>
+          成行分
         </div>
-        {summary.isFallback && summary.mapNote ? (
-          <p className="mt-2 border-t border-black/6 pt-2 text-[11px] leading-5 text-black/50">{summary.mapNote}</p>
-        ) : null}
-      </div>
-
-      <div className="min-w-0">
-        <p className="text-[11px] font-bold text-black/45">{summary.isFallback ? "当前执行方案" : "AI 推荐最佳方案"}</p>
-        <h2 className="mt-0.5 truncate text-base font-extrabold text-meituan-ink">{summary.planTitle}</h2>
-        <p className="mt-1.5 text-[11px] leading-5 text-black/50">{summary.strategyNote}</p>
-      </div>
-
-      {summary.isFallback && summary.comparisonSummaryLine ? (
-        <p className="mt-2 text-xs leading-5 text-black/60">{summary.comparisonSummaryLine}</p>
-      ) : null}
-
-      <p className="mt-2 text-xs font-bold text-meituan-ink">
-        成行分 {summary.overallScore}
-        {summary.isFallback && typeof summary.safetyScore === "number" ? (
-          <span> · 稳妥度 {summary.safetyScore}</span>
-        ) : summary.experienceLabel ? (
-          <span> · {summary.experienceLabel}</span>
-        ) : null}
-      </p>
-
-      {summary.isFallback ? (
-        <div className="mt-1.5 space-y-1 text-[11px] leading-5 text-black/62">
-          {summary.solvedRisk ? (
-            <p>
-              <span className="font-bold text-black/70">解决：</span>
-              {summary.solvedRisk}
-            </p>
-          ) : null}
-          {summary.tradeoffSummary ? (
-            <p>
-              <span className="font-bold text-black/70">代价：</span>
-              {summary.tradeoffSummary}
-            </p>
-          ) : null}
+        <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
+          <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalMinutes}</b>
+          总耗时
         </div>
-      ) : summary.riskSummary ? (
-        <p className="mt-1.5 text-[11px] leading-5 text-black/55">
-          <span className="font-bold text-black/70">风险：</span>
-          {summary.riskSummary}
-        </p>
-      ) : null}
-
-      <div className={`mt-3 grid gap-1.5 text-center text-[10px] text-black/55 ${summary.isFallback ? "grid-cols-4" : "grid-cols-4"}`}>
-        {!summary.isFallback ? (
-          <div className="rounded-lg bg-meituan-yellow/75 px-1 py-2">
-            <b className="block text-base text-meituan-ink">{summary.overallScore}</b>
-            成行分
-          </div>
-        ) : typeof summary.safetyScore === "number" ? (
-          <div className="rounded-lg bg-emerald-50 px-1 py-2">
-            <b className="block text-base text-emerald-800">{summary.safetyScore}</b>
-            稳妥度
-          </div>
-        ) : null}
-        <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{summary.totalMinutes}</b>
-          分钟
+        <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
+          <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalBudget}</b>
+          预算
         </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{summary.totalBudget}</b>
-          元预算
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{summary.totalWaitMinutes}</b>
-          分等待
+        <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
+          <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalWaitMinutes}</b>
+          等待
         </div>
       </div>
 
-      <div className="mt-3 space-y-1.5">
-        {summary.slots.length ? (
-          summary.slots.map((slot) => (
-            <div key={`${slot.slotType}-${slot.startTime}`} className="flex items-center gap-2 rounded-lg bg-meituan-gray/80 px-2.5 py-2">
-              <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">
-                {slot.startTime}-{slot.endTime}
-              </span>
-              <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                {slotTypeLabel[slot.slotType]}
-              </span>
-              <span className="min-w-0 truncate text-xs font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
-            </div>
-          ))
-        ) : (
-          <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-2 text-xs leading-5 text-black/65">
-            {summary.slotFallbackText ?? "暂无路线节点"}
-          </p>
-        )}
-      </div>
-
+      {/* 3. 出行指引 — 首屏优先 */}
       <RouteGuidanceBlock guidance={guidance} />
 
-      <div className="mt-3">
-        <p className="mb-1.5 text-xs font-extrabold text-black/70">为什么适合你这次</p>
-        <ul className="space-y-1">
-          {summary.reasons.map((reason) => (
-            <li key={reason} className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs leading-5 text-black/65">
-              {reason}
-            </li>
-          ))}
-        </ul>
+      {/* 4. 路线节点 */}
+      <div className="mt-2.5">
+        <p className="mb-1 text-[11px] font-bold text-black/45">关键节点</p>
+        <div className="space-y-1">
+          {displaySlots.length ? (
+            displaySlots.map((slot) => (
+              <div
+                key={`${slot.slotType}-${slot.startTime}`}
+                className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2 py-1.5"
+              >
+                <span className="w-[68px] shrink-0 text-[10px] font-bold text-black/50">
+                  {slot.startTime}-{slot.endTime}
+                </span>
+                <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
+                  {slotTypeLabel[slot.slotType]}
+                </span>
+                <span className="min-w-0 truncate text-[11px] font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-lg bg-meituan-gray/70 px-2 py-1.5 text-[11px] leading-5 text-black/55">
+              {summary.slotFallbackText ?? "暂无路线节点"}
+            </p>
+          )}
+          {summary.slots.length > 2 ? (
+            <p className="text-[10px] text-black/40">另有 {summary.slots.length - 2} 个节点，详情页可查看</p>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mt-4 flex gap-2">
+      {/* 5. demo 提示 */}
+      <p className="mt-2 text-[10px] leading-4 text-black/42">{guidance.mapDemoNote}</p>
+
+      {/* 6. CTA */}
+      <div className="mt-3 flex gap-2">
         <button
           type="button"
           className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
@@ -366,9 +319,9 @@ function MainTabContent({
         <button
           type="button"
           className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62 hover:bg-black/5"
-          onClick={onViewFallback}
+          onClick={summary.isFallback ? onSelectMainPlan : onViewFallback}
         >
-          查看备选方案
+          {summary.isFallback ? "恢复主方案" : "查看备选方案"}
         </button>
       </div>
     </>
