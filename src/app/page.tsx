@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { AgentStepper } from "@/components/AgentStepper";
+import { BestPlanCard } from "@/components/BestPlanCard";
 import { ExecutionPanel } from "@/components/ExecutionPanel";
 import { InputPanel } from "@/components/InputPanel";
 import { IntentSummary } from "@/components/IntentSummary";
@@ -144,6 +145,7 @@ export default function Home() {
       <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
       <TripPersonaCard parseResult={result.parseResult} />
       <IntentSummary parseResult={result.parseResult} />
+      <BestPlanCard routePlan={result.routePlan} rankedPois={result.rankedPois} parseResult={result.parseResult} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
         <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
@@ -154,7 +156,9 @@ export default function Home() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.65fr)_minmax(0,1.35fr)]">
         <RecommendationPanel pois={result.rankedPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} />
-        <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
+        <div id="execution-panel" className="scroll-mt-5">
+          <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
+        </div>
       </div>
     </main>
   );
