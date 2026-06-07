@@ -2,10 +2,10 @@ import type { Intent, ParseResult } from "./types";
 import { ruleBasedParser } from "@/lib/parsers/RuleBasedParser";
 
 const DEFAULT_GOAL =
-  "今天下午是空的，想和家人/朋友出去玩几个小时，别离家太远，帮我安排一下。";
+  "今天下午2点有3小时空，想找个地方轻松待一下，晚点和朋友吃饭，不想排太久，也不想绕路太多。";
 
-const DEFAULT_WECHAT = "希望通勤不超过30分钟，人均预算150以内，尽量别排队。";
-const DEFAULT_SEED = "如果适合亲子/展览/逛街/citywalk 都可以，也可以顺便安排轻食晚餐。";
+const DEFAULT_WECHAT = "朋友说别太远，最好地铁方便，人均150以内。";
+const DEFAULT_SEED = "";
 
 export const defaultInputs = {
   goal: DEFAULT_GOAL,

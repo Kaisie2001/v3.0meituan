@@ -81,8 +81,9 @@ export default function Home() {
       return;
     }
 
-    setPendingRoutePrefParse(nextResult.parseResult);
-    setRoutePrefOpen(true);
+    setResult(nextResult);
+    setPendingRoutePrefParse(null);
+    setActiveStep(STEP_COUNT);
     setLoading(false);
   }
 
@@ -99,11 +100,13 @@ export default function Home() {
         onSubmit={(patch) => {
           if (!pendingParse) return;
           const patchedParse = applyParseOverrides(pendingParse, patch);
+          const nextResult = runAgentFromParseResult(patchedParse);
+          setResult(nextResult);
+          setSelectedPoiId(undefined);
           setClarifyOpen(false);
           setPendingParse(null);
-          setPendingRoutePrefParse(patchedParse);
-          setRoutePrefOpen(true);
-          setActiveStep(1);
+          setPendingRoutePrefParse(null);
+          setActiveStep(STEP_COUNT);
         }}
       />
       <RoutePreferenceModal
@@ -142,9 +145,7 @@ export default function Home() {
         onGenerate={handleGenerate}
       />
 
-      <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
       <TripPersonaCard parseResult={result.parseResult} />
-      <IntentSummary parseResult={result.parseResult} />
       <BestPlanCard routePlan={result.routePlan} rankedPois={result.rankedPois} parseResult={result.parseResult} />
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
@@ -160,6 +161,9 @@ export default function Home() {
           <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
         </div>
       </div>
+
+      <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
+      <IntentSummary parseResult={result.parseResult} />
     </main>
   );
 }

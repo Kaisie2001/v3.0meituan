@@ -178,9 +178,9 @@ export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelPro
           aria-expanded={traceOpen}
         >
           <span>
-            <span className="block text-sm font-extrabold text-black/78">查看工具调用记录</span>
+            <span className="block text-sm font-extrabold text-black/78">查看 Agent 如何规划与执行</span>
             <span className="mt-1 block text-xs leading-5 text-black/50">
-              包含 CheckAvailability、ReserveTable、BuyDeal、GenerateShareText 等 mock tool 调用
+              包含地点搜索、可订检查、排队判断、路线生成、订座/下单/发送等 mock tool 调用。
             </span>
             {trace.length ? (
               <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已完成 {completedTraceCount} 项执行动作，可展开查看详情</span>

@@ -26,6 +26,8 @@ export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
   }
 
   const fallbackPlans = routePlan.fallbackPlans ?? [];
+  const primaryFallback = fallbackPlans[0];
+  const hiddenFallbackCount = Math.max(0, fallbackPlans.length - 1);
   const mainSlots = routePlan.mainPlan?.slots ?? [];
   const fallbackPersonaCopy = parseResult ? fallbackCopy[inferPersona(parseResult)] : "";
 
@@ -105,35 +107,49 @@ export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
         <div className="mt-5 rounded-lg border border-black/10 bg-meituan-gray p-4">
           <h3 className="mb-3 text-sm font-extrabold text-black/80">备选方案</h3>
           <div className="space-y-3">
-            {fallbackPlans.map((plan) => (
-              <div key={plan.id} className="rounded-lg bg-white p-3">
+            {primaryFallback ? (
+              <div key={primaryFallback.id} className="rounded-lg bg-white p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-extrabold text-black/80">{plan.title}</p>
-                    {plan.trigger ? <p className="mt-1 text-xs text-black/55">触发：{plan.trigger}</p> : null}
+                    <p className="text-sm font-extrabold text-black/80">{primaryFallback.title}</p>
+                    {primaryFallback.trigger ? <p className="mt-1 text-xs text-black/55">触发：{primaryFallback.trigger}</p> : null}
                   </div>
                   <span className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-bold text-black/60">
-                    等待 {plan.totalWaitMinutes}m / 预算 {plan.totalBudget} 元
+                    等待 {primaryFallback.totalWaitMinutes}m / 预算 {primaryFallback.totalBudget} 元
                   </span>
                 </div>
-                {plan.diffFromMain ? (
+                {primaryFallback.diffFromMain ? (
                   <div className="mt-2 text-xs text-black/55">
-                    对比主方案：预算 {plan.diffFromMain.deltaBudget >= 0 ? "+" : ""}{plan.diffFromMain.deltaBudget} 元 / 等待{" "}
-                    {plan.diffFromMain.deltaWaitMinutes >= 0 ? "+" : ""}{plan.diffFromMain.deltaWaitMinutes}m / 通勤{" "}
-                    {plan.diffFromMain.deltaCommuteMinutes >= 0 ? "+" : ""}{plan.diffFromMain.deltaCommuteMinutes}m
+                    如果主方案满座或排队过长，替换为 {primaryFallback.slots.find((slot) => slot.slotType === "food")?.poi?.name ?? primaryFallback.title}，预算{" "}
+                    {primaryFallback.diffFromMain.deltaBudget >= 0 ? "+" : ""}{primaryFallback.diffFromMain.deltaBudget} 元 / 等待{" "}
+                    {primaryFallback.diffFromMain.deltaWaitMinutes >= 0 ? "+" : ""}{primaryFallback.diffFromMain.deltaWaitMinutes}m / 通勤{" "}
+                    {primaryFallback.diffFromMain.deltaCommuteMinutes >= 0 ? "+" : ""}{primaryFallback.diffFromMain.deltaCommuteMinutes}m
                   </div>
                 ) : null}
                 {fallbackPersonaCopy ? <div className="mt-2 rounded-md bg-yellow-50 px-3 py-2 text-xs font-semibold text-black/68">{fallbackPersonaCopy}</div> : null}
                 <div className="mt-3 space-y-2">
-                  {plan.steps.slice(1, 3).map((step) => (
-                    <div key={`${plan.id}-${step.time}-${step.title}`} className="rounded-md bg-meituan-gray px-3 py-2 text-xs text-black/70">
+                  {primaryFallback.steps.slice(1, 3).map((step) => (
+                    <div key={`${primaryFallback.id}-${step.time}-${step.title}`} className="rounded-md bg-meituan-gray px-3 py-2 text-xs text-black/70">
                       <span className="font-bold text-black/75">{step.title}</span>
                       <span className="ml-2">{step.detail}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            ))}
+            ) : null}
+            {hiddenFallbackCount ? (
+              <details className="rounded-lg bg-white px-3 py-2 text-sm text-black/62">
+                <summary className="cursor-pointer font-bold">还有 {hiddenFallbackCount} 个备选方案</summary>
+                <div className="mt-2 space-y-2">
+                  {fallbackPlans.slice(1).map((plan) => (
+                    <div key={plan.id} className="rounded-md bg-meituan-gray px-3 py-2 text-xs">
+                      <span className="font-bold">{plan.title}</span>
+                      <span className="ml-2">等待 {plan.totalWaitMinutes}m / 预算 {plan.totalBudget} 元</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
           </div>
         </div>
       ) : null}

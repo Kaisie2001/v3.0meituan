@@ -4,10 +4,10 @@ import { useState } from "react";
 import { defaultInputs } from "@/lib/parseIntent";
 
 const exampleGoals = [
-  "今天下午有3小时空，帮我安排一个轻松活动",
-  "晚上和朋友吃饭，吃完想找地方聊天",
-  "周末带孩子出去玩几个小时，别太累",
-  "我先去学校拿东西，再找地方坐坐，晚上和朋友吃饭",
+  "今天下午2点有3小时空，帮我安排一个轻松活动，通勤30分钟内",
+  "今天晚上6点和朋友吃饭，吃完想找地方聊天，人均150以内",
+  "周六下午2点带孩子出去玩3小时，别太累，通勤30分钟内",
+  "今天下午4点有3小时空，先去学校拿东西，再找地方坐坐，晚上和朋友吃饭，通勤30分钟内",
 ];
 
 type InputPanelProps = {
@@ -43,6 +43,9 @@ export function InputPanel({
           <p className="text-sm font-semibold text-black/55">GoMap Agent</p>
           <h1 className="text-3xl font-bold tracking-normal text-meituan-ink">美团成行地图</h1>
           <p className="mt-2 text-base font-semibold text-black/70">一句话，让 AI 帮你安排本地短时活动</p>
+          <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-xs font-semibold leading-5 text-black/58">
+            试试：点击示例需求，AI 会自动生成成行方案并模拟完成预订/下单。
+          </p>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {exampleGoals.map((example) => (

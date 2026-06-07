@@ -124,6 +124,7 @@ export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCar
         <button type="button" className="rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-bold text-black/62 hover:bg-black/5">
           避开排队
         </button>
+        <span className="text-xs font-semibold text-black/45 sm:ml-2">点击后到下方执行面板确认。</span>
       </div>
     </section>
   );
