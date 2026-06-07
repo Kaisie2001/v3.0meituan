@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { AgentStepper } from "@/components/AgentStepper";
-import { BestPlanCard } from "@/components/BestPlanCard";
+import { BottomPlanSheet } from "@/components/BottomPlanSheet";
 import { PlanningModal } from "@/components/PlanningModal";
 import { ExecutionPanel } from "@/components/ExecutionPanel";
 import { InputPanel } from "@/components/InputPanel";
@@ -134,7 +133,7 @@ export default function Home() {
         <div className="flex shrink-0 items-center justify-center bg-white/85 px-4 py-3">
           <div className="h-1.5 w-24 rounded-full bg-black/12" />
         </div>
-        <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <ClarifyModal
             open={clarifyOpen}
             missingFields={pendingParse?.missingFields ?? []}
@@ -185,36 +184,58 @@ export default function Home() {
           />
 
           {screen === "input" ? (
-            <InputPanel
-              goal={goal}
-              wechat={wechat}
-              seed={seed}
-              loading={loading}
-              onGoalChange={setGoal}
-              onWechatChange={setWechat}
-              onSeedChange={setSeed}
-              onGenerate={handleGenerate}
-            />
+            <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+              <InputPanel
+                goal={goal}
+                wechat={wechat}
+                seed={seed}
+                loading={loading}
+                onGoalChange={setGoal}
+                onWechatChange={setWechat}
+                onSeedChange={setSeed}
+                onGenerate={handleGenerate}
+              />
+            </div>
           ) : null}
 
           {screen === "result" ? (
-            <>
-              <ScreenBackButton label="返回修改需求" onClick={() => setScreen("input")} />
-              <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
-              <TripPersonaCard parseResult={result.parseResult} />
-              <BestPlanCard
-                routePlan={result.routePlan}
-                rankedPois={result.rankedPois}
-                parseResult={result.parseResult}
-                onViewDetails={() => setScreen("details")}
-                onConfirmExecute={() => setScreen("execute")}
-              />
-            </>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <header className="flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/95 px-3 py-2.5">
+                <button
+                  type="button"
+                  onClick={() => setScreen("input")}
+                  className="rounded-lg px-1 py-1 text-sm font-bold text-black/62 transition hover:text-black/85"
+                >
+                  ← 返回
+                </button>
+                <h1 className="min-w-0 flex-1 truncate text-sm font-extrabold text-meituan-ink">AI 已为你规划好</h1>
+              </header>
+              <TripPersonaCard parseResult={result.parseResult} variant="compact" />
+              <div className="relative min-h-0 flex-1">
+                <LeafletPlannerMap
+                  variant="hero"
+                  className="h-full min-h-[58%]"
+                  pois={mapPois}
+                  selectedPoiId={selectedPoiId}
+                  onSelectPoi={handleSelectPoi}
+                  routePoiIds={routePoiIds}
+                />
+                <div className="absolute inset-x-0 bottom-0 z-10 max-h-[42%]">
+                  <BottomPlanSheet
+                    routePlan={result.routePlan}
+                    rankedPois={result.rankedPois}
+                    parseResult={result.parseResult}
+                    onViewDetails={() => setScreen("details")}
+                    onConfirmExecute={() => setScreen("execute")}
+                  />
+                </div>
+              </div>
+            </div>
           ) : null}
 
           {screen === "details" ? (
-            <>
-              <ScreenBackButton label="返回最佳方案" onClick={() => setScreen("result")} />
+            <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+              <ScreenBackButton label="返回主方案" onClick={() => setScreen("result")} />
               <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
               <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
               {selectedPoi ? (
@@ -226,15 +247,17 @@ export default function Home() {
                 selectedPoiId={selectedPoiId}
                 onSelectPoi={handleSelectPoi}
               />
-              <IntentSummary parseResult={result.parseResult} />
-            </>
+              <div className="opacity-80">
+                <IntentSummary parseResult={result.parseResult} />
+              </div>
+            </div>
           ) : null}
 
           {screen === "execute" ? (
-            <>
+            <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
               <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
               <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
-            </>
+            </div>
           ) : null}
         </div>
         <PlanningModal open={isPlanningOpen} step={planningStep} />

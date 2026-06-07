@@ -9,6 +9,8 @@ type LeafletPlannerMapProps = {
   selectedPoiId?: string;
   onSelectPoi: (poi: ScoredPoi) => void;
   routePoiIds: string[];
+  variant?: "default" | "hero";
+  className?: string;
 };
 
 function toLatLng(poi: ScoredPoi) {
@@ -33,7 +35,8 @@ const levelColor = {
   gray: "#94a3b8",
 };
 
-export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiIds }: LeafletPlannerMapProps) {
+export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiIds, variant = "default", className = "" }: LeafletPlannerMapProps) {
+  const isHero = variant === "hero";
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
@@ -137,19 +140,54 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
     }
   }, [routeLatLngs]);
 
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const timer = window.setTimeout(() => {
+      try {
+        mapRef.current?.invalidateSize();
+      } catch {}
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [variant, className]);
+
+  const legend = (
+    <div className={`flex flex-wrap gap-2 text-xs text-black/60 ${isHero ? "gap-1.5 text-[10px]" : ""}`}>
+      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.green }} />推荐</span>
+      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.yellow }} />可选</span>
+      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.red }} />不建议</span>
+      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.gray }} />不可用</span>
+    </div>
+  );
+
+  if (isHero) {
+    return (
+      <div className={`relative flex h-full min-h-0 w-full flex-col ${className}`}>
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-slate-100">
+          <div ref={hostRef} className="absolute inset-0" />
+          <div className="pointer-events-none absolute left-2 top-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/92 px-2 py-1.5 shadow-sm backdrop-blur-sm">
+            {legend}
+          </div>
+          {tileFailed ? (
+            <div className="absolute inset-0 z-[1001] grid place-items-center bg-slate-50 text-center">
+              <div className="max-w-md px-6">
+                <p className="text-sm font-bold text-black/75">底图加载失败</p>
+                <p className="mt-2 text-sm text-black/60">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <section className="rounded-lg border border-black/5 bg-white p-3 shadow-soft">
+    <section className={`rounded-lg border border-black/5 bg-white p-3 shadow-soft ${className}`}>
       <div className="mb-3 flex flex-col gap-2">
         <div>
           <h2 className="text-base font-bold">动态规划地图</h2>
           <p className="text-xs text-black/58">底图：{tileLabel}（本地 Demo），点位与信息为 mock。</p>
         </div>
-        <div className="flex flex-wrap gap-2 text-xs text-black/60">
-          <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.green }} />推荐</span>
-          <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.yellow }} />可选</span>
-          <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.red }} />不建议</span>
-          <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.gray }} />不可用</span>
-        </div>
+        {legend}
       </div>
       <div className="relative h-[260px] w-full overflow-hidden rounded-lg border border-black/10">
         <div ref={hostRef} className="absolute inset-0" />

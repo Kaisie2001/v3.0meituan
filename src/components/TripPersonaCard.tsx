@@ -3,12 +3,27 @@ import type { ParseResult } from "@/lib/types";
 
 type TripPersonaCardProps = {
   parseResult?: ParseResult;
+  variant?: "full" | "compact";
 };
 
-export function TripPersonaCard({ parseResult }: TripPersonaCardProps) {
+export function TripPersonaCard({ parseResult, variant = "full" }: TripPersonaCardProps) {
   if (!parseResult) return null;
 
   const config = getPersonaConfig(parseResult);
+
+  if (variant === "compact") {
+    return (
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-black/5 bg-white/90 px-3 py-2">
+        <span className="text-[11px] font-bold text-black/45">出行画像</span>
+        <span className="rounded-full bg-meituan-yellow px-2 py-0.5 text-[11px] font-extrabold text-meituan-ink">{config.label}</span>
+        {config.tags.slice(0, 2).map((tag) => (
+          <span key={tag} className="rounded-full bg-meituan-gray px-2 py-0.5 text-[11px] font-bold text-black/55">
+            {tag}
+          </span>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
