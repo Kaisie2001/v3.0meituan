@@ -1,0 +1,5 @@
+{"ts":"2026-05-19T17:54:49.980Z","userId":"guest","action":"dislike","stop":{"id":"f1","name":"便宜坊烤鸭(前门店)","type":"烤鸭","kind":"food"},"intentDelta":null}
+{"ts":"2026-05-19T17:54:52.096Z","userId":"guest","action":"dislike","stop":{"id":"f1","name":"便宜坊烤鸭(前门店)","type":"烤鸭","kind":"food"},"intentDelta":null}
+{"ts":"2026-05-19T17:54:55.786Z","userId":"guest","action":"dislike","stop":{"id":"a4","name":"前门大街","type":"购物","kind":"attraction"},"intentDelta":null}
+{"ts":"2026-05-19T17:55:00.165Z","userId":"guest","action":"dislike","stop":{"id":"a5","name":"国家博物馆","type":"文化","kind":"attraction"},"intentDelta":null}
+{"ts":"2026-05-19T17:55:04.923Z","userId":"guest","action":"dislike","stop":{"id":"f2","name":"护国寺小吃","type":"小吃","kind":"food"},"intentDelta":null}

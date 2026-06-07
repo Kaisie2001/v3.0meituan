@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: georouter
+          POSTGRES_PASSWORD: georouter
+          POSTGRES_DB: georouter
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U georouter -d georouter"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://georouter:georouter@localhost:5432/georouter
+      DATABASE_SSL: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm install
+      - run: node scripts/migrate.js
+      - run: node tests/smoke.js
