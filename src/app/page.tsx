@@ -313,6 +313,7 @@ export default function Home() {
                     onConfirmExecute={() => setScreen("execute")}
                     preferenceSummary={preferenceSummaryText}
                     timeWindowSummary={timeWindowSummaryText}
+                    timePickerValue={timePickerValue}
                     onOpenRoutePreferences={openRoutePreferences}
                   />
                 </div>

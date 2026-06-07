@@ -1,4 +1,6 @@
 import type { Intent, ItineraryPlan, RoutePlan, TransportMode } from "./types";
+import type { TimePickerValue } from "./preferenceSummary";
+import { buildTimeWindowEffects } from "./timeWindowEffects";
 
 export const MAP_DEMO_NOTE = "地图路线为 demo 示意，实际导航可接入美团/地图路径服务。";
 
@@ -12,6 +14,7 @@ export type RouteGuidanceSummary = {
   steps: string[];
   mapDemoNote: string;
   fallbackNote?: string;
+  timeHint?: string;
 };
 
 type GuidanceMode = TransportMode | "auto";
@@ -134,8 +137,9 @@ export function buildRouteGuidance(params: {
   intent: Intent;
   selectedPlanType: "main" | "fallback";
   selectedFallbackIndex: number | null;
+  timePicker?: TimePickerValue | null;
 }): RouteGuidanceSummary {
-  const { routePlan, intent, selectedPlanType, selectedFallbackIndex } = params;
+  const { routePlan, intent, selectedPlanType, selectedFallbackIndex, timePicker } = params;
   const activePlan = resolveActivePlan(routePlan, selectedPlanType, selectedFallbackIndex);
   const isFallback = selectedPlanType === "fallback" && selectedFallbackIndex !== null;
   const mode = resolveGuidanceMode(intent);
@@ -159,11 +163,14 @@ export function buildRouteGuidance(params: {
       break;
   }
 
+  const timeEffects = buildTimeWindowEffects(timePicker);
+
   return {
     title: "出行指引",
     transportLabel: transportLabel(mode),
     steps: sanitizeSteps(steps),
     mapDemoNote: MAP_DEMO_NOTE,
     fallbackNote: isFallback ? FALLBACK_GUIDANCE_NOTE : undefined,
+    timeHint: timeEffects.routeGuidanceHint,
   };
 }
