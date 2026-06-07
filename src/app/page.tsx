@@ -286,7 +286,12 @@ export default function Home() {
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
                 <ScreenBackButton label="返回主方案" onClick={() => setScreen("result")} />
                 <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
-                <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
+                <RouteTimeline
+                  routePlan={result.routePlan}
+                  parseResult={result.parseResult}
+                  selectedPlanType={selectedPlanType}
+                  selectedFallbackIndex={selectedFallbackIndex}
+                />
                 {selectedPoi ? (
                   <PoiDetailPanel poi={selectedPoi} onClose={() => setSelectedPoiId(undefined)} onDislike={handleDislikePoi} />
                 ) : null}

@@ -1,9 +1,12 @@
 import { inferPersona } from "@/lib/persona";
+import { buildRouteGuidance } from "@/lib/routeGuidance";
 import type { ParseResult, RoutePlan } from "@/lib/types";
 
 type RouteTimelineProps = {
   routePlan?: RoutePlan;
   parseResult?: ParseResult;
+  selectedPlanType?: "main" | "fallback";
+  selectedFallbackIndex?: number | null;
 };
 
 const fallbackCopy = {
@@ -15,7 +18,12 @@ const fallbackCopy = {
   casual: "这个替代方案更灵活，适合按排队、天气或心情随时替换。",
 };
 
-export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
+export function RouteTimeline({
+  routePlan,
+  parseResult,
+  selectedPlanType = "main",
+  selectedFallbackIndex = null,
+}: RouteTimelineProps) {
   if (!routePlan) {
     return (
       <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
@@ -30,6 +38,15 @@ export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
   const hiddenFallbackCount = Math.max(0, fallbackPlans.length - 1);
   const mainSlots = routePlan.mainPlan?.slots ?? [];
   const fallbackPersonaCopy = parseResult ? fallbackCopy[inferPersona(parseResult)] : "";
+  const routeGuidance =
+    parseResult && routePlan
+      ? buildRouteGuidance({
+          routePlan,
+          intent: parseResult.intent,
+          selectedPlanType,
+          selectedFallbackIndex,
+        })
+      : null;
 
   return (
     <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
@@ -65,6 +82,25 @@ export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
           </div>
         ))}
       </div>
+
+      {routeGuidance ? (
+        <div className="mt-4 rounded-lg border border-black/10 bg-meituan-gray/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-extrabold text-black/80">{routeGuidance.title}</h3>
+            <span className="shrink-0 rounded-full bg-meituan-yellow/30 px-2 py-0.5 text-[10px] font-bold text-meituan-ink">
+              {routeGuidance.transportLabel}
+            </span>
+          </div>
+          <ul className="mt-2 space-y-1.5">
+            {routeGuidance.steps.map((step) => (
+              <li key={step} className="text-xs leading-5 text-black/65">
+                · {step}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 border-t border-black/8 pt-2 text-[11px] leading-4 text-black/45">{routeGuidance.mapDemoNote}</p>
+        </div>
+      ) : null}
 
       {mainSlots.length ? (
         <div className="mt-5 rounded-lg border border-black/10 bg-meituan-gray p-4">

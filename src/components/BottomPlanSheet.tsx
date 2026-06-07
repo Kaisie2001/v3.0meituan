@@ -10,6 +10,7 @@ import {
   type FallbackPlanDisplay,
   type PlanComparisonSummary,
 } from "@/lib/planComparison";
+import { buildRouteGuidance, type RouteGuidanceSummary } from "@/lib/routeGuidance";
 import type { ItineraryPlan, ParseResult, RoutePlan, RouteSlot, ScoredPoi } from "@/lib/types";
 
 export type SheetTab = "main" | "fallback" | "poi";
@@ -166,8 +167,31 @@ function buildCurrentPlanSummary(
   };
 }
 
+function RouteGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
+  return (
+    <div className="mt-3 rounded-lg border border-black/8 bg-white px-3 py-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-extrabold text-black/70">{guidance.title}</p>
+        <span className="shrink-0 rounded-full bg-meituan-yellow/25 px-2 py-0.5 text-[10px] font-bold text-meituan-ink">
+          {guidance.transportLabel}
+        </span>
+      </div>
+      <ul className="mt-2 space-y-1">
+        {guidance.steps.map((step) => (
+          <li key={step} className="flex gap-1.5 text-[11px] leading-5 text-black/62">
+            <span className="shrink-0 text-black/35">·</span>
+            <span>{step}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 border-t border-black/6 pt-2 text-[10px] leading-4 text-black/45">{guidance.mapDemoNote}</p>
+    </div>
+  );
+}
+
 function MainTabContent({
   summary,
+  guidance,
   preferenceSummary,
   onOpenRoutePreferences,
   switchFeedback,
@@ -176,6 +200,7 @@ function MainTabContent({
   onSelectMainPlan,
 }: {
   summary: CurrentPlanSummary;
+  guidance: RouteGuidanceSummary;
   preferenceSummary?: string;
   onOpenRoutePreferences?: () => void;
   switchFeedback: string | null;
@@ -316,6 +341,8 @@ function MainTabContent({
           </p>
         )}
       </div>
+
+      <RouteGuidanceBlock guidance={guidance} />
 
       <div className="mt-3">
         <p className="mb-1.5 text-xs font-extrabold text-black/70">为什么适合你这次</p>
@@ -738,6 +765,17 @@ export function BottomPlanSheet({
     [routePlan, rankedPois, parseResult, selectedPlanType, selectedFallbackIndex, planComparison],
   );
 
+  const routeGuidance = useMemo(
+    () =>
+      buildRouteGuidance({
+        routePlan,
+        intent: parseResult.intent,
+        selectedPlanType,
+        selectedFallbackIndex,
+      }),
+    [routePlan, parseResult.intent, selectedPlanType, selectedFallbackIndex],
+  );
+
   useEffect(() => {
     if (activeTab !== "fallback") {
       setFallbackDetailIndex(null);
@@ -784,6 +822,7 @@ export function BottomPlanSheet({
         {activeTab === "main" ? (
           <MainTabContent
             summary={currentPlanSummary}
+            guidance={routeGuidance}
             preferenceSummary={preferenceSummary}
             onOpenRoutePreferences={onOpenRoutePreferences}
             switchFeedback={switchFeedback}
