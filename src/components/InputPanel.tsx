@@ -37,11 +37,11 @@ export function InputPanel({
   const hasSeed = seed.trim().length > 0;
 
   return (
-    <section className="rounded-lg border border-black/5 bg-white p-5 shadow-soft">
-      <div className="mb-5">
+    <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
+      <div className="mb-4">
         <div>
           <p className="text-sm font-semibold text-black/55">GoMap Agent</p>
-          <h1 className="text-3xl font-bold tracking-normal text-meituan-ink">美团成行地图</h1>
+          <h1 className="text-2xl font-bold tracking-normal text-meituan-ink">美团成行地图</h1>
           <p className="mt-2 text-base font-semibold text-black/70">一句话，让 AI 帮你安排本地短时活动</p>
           <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-xs font-semibold leading-5 text-black/58">
             试试：点击示例需求，AI 会自动生成成行方案并模拟完成预订/下单。

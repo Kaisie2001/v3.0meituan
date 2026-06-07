@@ -43,7 +43,7 @@ export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
         </span>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-lg bg-meituan-gray p-3"><p className="text-xs text-black/55">总耗时</p><b>{routePlan.totalMinutes} 分钟</b></div>
         <div className="rounded-lg bg-meituan-gray p-3"><p className="text-xs text-black/55">总预算</p><b>{routePlan.totalBudget} 元</b></div>
         <div className="rounded-lg bg-meituan-gray p-3"><p className="text-xs text-black/55">预计等待</p><b>{routePlan.totalWaitMinutes} 分钟</b></div>

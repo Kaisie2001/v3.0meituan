@@ -41,14 +41,14 @@ export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCar
   const score = topPoi?.goabilityScore ?? 0;
 
   return (
-    <section className="rounded-lg border border-meituan-yellow/40 bg-white p-4 shadow-soft">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <section className="rounded-lg border border-meituan-yellow/40 bg-white p-3 shadow-soft">
+      <div className="flex flex-col gap-3">
         <div>
           <p className="text-xs font-bold text-black/45">AI 推荐最佳方案</p>
-          <h2 className="mt-1 text-2xl font-extrabold tracking-normal text-meituan-ink">{personaConfig.planTitle}</h2>
+          <h2 className="mt-1 text-xl font-extrabold tracking-normal text-meituan-ink">{personaConfig.planTitle}</h2>
           <p className="mt-2 text-sm leading-6 text-black/62">先看结论：这是当前最适合直接出发的一套安排，后面仍保留地图、路线和备选细节。</p>
         </div>
-        <div className="grid grid-cols-4 gap-2 text-center text-xs lg:min-w-[380px]">
+        <div className="grid grid-cols-4 gap-2 text-center text-xs">
           <div className="rounded-lg bg-meituan-yellow/80 p-3">
             <b className="block text-lg text-meituan-ink">{score}</b>
             成行分
@@ -68,7 +68,7 @@ export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCar
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
+      <div className="mt-3 grid gap-3">
         <div className="rounded-lg bg-meituan-gray p-3">
           <p className="mb-3 text-sm font-extrabold text-black/78">路线节点</p>
           <div className="space-y-2">

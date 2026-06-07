@@ -138,11 +138,11 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
   }, [routeLatLngs]);
 
   return (
-    <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <section className="rounded-lg border border-black/5 bg-white p-3 shadow-soft">
+      <div className="mb-3 flex flex-col gap-2">
         <div>
-          <h2 className="text-lg font-bold">动态规划地图</h2>
-          <p className="text-sm text-black/58">底图：{tileLabel}（本地 Demo），点位与信息为 mock。</p>
+          <h2 className="text-base font-bold">动态规划地图</h2>
+          <p className="text-xs text-black/58">底图：{tileLabel}（本地 Demo），点位与信息为 mock。</p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-black/60">
           <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.green }} />推荐</span>
@@ -151,7 +151,7 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
           <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.gray }} />不可用</span>
         </div>
       </div>
-      <div className="relative h-[560px] w-full overflow-hidden rounded-lg border border-black/10">
+      <div className="relative h-[260px] w-full overflow-hidden rounded-lg border border-black/10">
         <div ref={hostRef} className="absolute inset-0" />
         {tileFailed ? (
           <div className="absolute inset-0 grid place-items-center bg-slate-50 text-center">

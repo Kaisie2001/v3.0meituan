@@ -88,7 +88,12 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[1520px] flex-col gap-5 px-4 py-5 lg:px-6">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 via-[#f5f6f8] to-slate-200 px-3 py-4">
+      <main className="mx-auto flex h-[844px] max-h-[calc(100vh-32px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-white/70 bg-[#f5f6f8] shadow-2xl">
+        <div className="flex shrink-0 items-center justify-center bg-white/85 px-4 py-3">
+          <div className="h-1.5 w-24 rounded-full bg-black/12" />
+        </div>
+        <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
       <ClarifyModal
         open={clarifyOpen}
         missingFields={pendingParse?.missingFields ?? []}
@@ -145,25 +150,23 @@ export default function Home() {
         onGenerate={handleGenerate}
       />
 
+      <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
       <TripPersonaCard parseResult={result.parseResult} />
       <BestPlanCard routePlan={result.routePlan} rankedPois={result.rankedPois} parseResult={result.parseResult} />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
-        <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
-        <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
-      </div>
+      <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
+      <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
 
       {selectedPoi ? <PoiDetailPanel poi={selectedPoi} onClose={() => setSelectedPoiId(undefined)} onDislike={handleDislikePoi} /> : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.65fr)_minmax(0,1.35fr)]">
-        <RecommendationPanel pois={result.rankedPois} parseResult={result.parseResult} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} />
-        <div id="execution-panel" className="scroll-mt-5">
-          <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
-        </div>
+      <RecommendationPanel pois={result.rankedPois} parseResult={result.parseResult} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} />
+      <div id="execution-panel" className="scroll-mt-3">
+        <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
       </div>
 
-      <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
       <IntentSummary parseResult={result.parseResult} />
-    </main>
+        </div>
+      </main>
+    </div>
   );
 }
