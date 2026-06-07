@@ -1,14 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/demoScenarios";
 import { defaultInputs } from "@/lib/parseIntent";
-
-const exampleGoals = [
-  "今天下午2点有3小时空，帮我安排一个轻松活动，通勤30分钟内",
-  "今天晚上6点和朋友吃饭，吃完想找地方聊天，人均150以内",
-  "周六下午2点带孩子出去玩3小时，别太累，通勤30分钟内",
-  "今天下午4点有3小时空，先去学校拿东西，再找地方坐坐，晚上和朋友吃饭，通勤30分钟内",
-];
 
 type InputPanelProps = {
   goal: string;
@@ -16,10 +10,13 @@ type InputPanelProps = {
   seed: string;
   loading: boolean;
   travelSettingsSummary: string;
+  activeDemoScenarioId?: DemoScenarioId | null;
   onGoalChange: (value: string) => void;
   onWechatChange: (value: string) => void;
   onSeedChange: (value: string) => void;
   onOpenTravelSettings: () => void;
+  onSelectDemoScenario: (scenarioId: DemoScenarioId) => void;
+  onResetDemo: () => void;
   onGenerate: () => void;
 };
 
@@ -29,10 +26,13 @@ export function InputPanel({
   seed,
   loading,
   travelSettingsSummary,
+  activeDemoScenarioId,
   onGoalChange,
   onWechatChange,
   onSeedChange,
   onOpenTravelSettings,
+  onSelectDemoScenario,
+  onResetDemo,
   onGenerate,
 }: InputPanelProps) {
   const [wechatOpen, setWechatOpen] = useState(false);
@@ -43,25 +43,45 @@ export function InputPanel({
   return (
     <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
       <div className="mb-4">
-        <div>
-          <p className="text-sm font-semibold text-black/55">GoMap Agent</p>
-          <h1 className="text-2xl font-bold tracking-normal text-meituan-ink">美团成行地图</h1>
-          <p className="mt-2 text-base font-semibold text-black/70">一句话，让 AI 帮你安排本地短时活动</p>
-          <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-xs font-semibold leading-5 text-black/58">
-            试试：点击示例需求，AI 会自动生成成行方案并模拟完成预订/下单。
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-black/55">GoMap Agent</p>
+            <h1 className="text-2xl font-bold tracking-normal text-meituan-ink">美团成行地图</h1>
+            <p className="mt-2 text-base font-semibold text-black/70">一句话，让 AI 帮你安排本地短时活动</p>
+          </div>
+          <button
+            type="button"
+            onClick={onResetDemo}
+            className="shrink-0 rounded-full border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/50 transition hover:border-black/20 hover:text-black/70"
+          >
+            重置演示
+          </button>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {exampleGoals.map((example) => (
-            <button
-              key={example}
-              type="button"
-              className="rounded-full border border-black/8 bg-meituan-gray px-3 py-2 text-left text-xs font-semibold leading-5 text-black/68 transition hover:border-meituan-yellow hover:bg-yellow-50"
-              onClick={() => onGoalChange(example)}
-            >
-              {example}
-            </button>
-          ))}
+        <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-xs font-semibold leading-5 text-black/58">
+          试试：选择下方演示场景，再点击「一键 AI 规划」查看不同本地生活方案。
+        </p>
+
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-bold text-black/45">试试这些场景</p>
+          <div className="flex flex-wrap gap-2">
+            {DEMO_SCENARIOS.map((scenario) => {
+              const active = activeDemoScenarioId === scenario.id;
+              return (
+                <button
+                  key={scenario.id}
+                  type="button"
+                  className={`rounded-full border px-3 py-2 text-xs font-bold transition ${
+                    active
+                      ? "border-meituan-yellow bg-meituan-yellow/20 text-meituan-ink"
+                      : "border-black/8 bg-meituan-gray text-black/68 hover:border-meituan-yellow hover:bg-yellow-50"
+                  }`}
+                  onClick={() => onSelectDemoScenario(scenario.id)}
+                >
+                  {scenario.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -149,7 +169,7 @@ export function InputPanel({
                 className="h-28 w-full resize-none rounded-lg border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
                 value={seed}
                 onChange={(event) => onSeedChange(event.target.value)}
-                placeholder={defaultInputs.seed}
+                placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
               />
             </div>
           ) : null}

@@ -25,6 +25,7 @@ import {
   type TravelSettings,
 } from "@/lib/preferenceSummary";
 import { buildExecutionPlanLabel, buildSelectedPlanSummary } from "@/lib/executionContext";
+import { DEMO_DEFAULT_STATE, getDemoScenarioById, type DemoScenarioId } from "@/lib/demoScenarios";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
 type AppScreen = "input" | "result" | "details" | "execute";
@@ -64,6 +65,8 @@ export default function Home() {
   const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("main");
   const [selectedPlanType, setSelectedPlanType] = useState<SelectedPlanType>("main");
   const [selectedFallbackIndex, setSelectedFallbackIndex] = useState<number | null>(null);
+  const [activeDemoScenarioId, setActiveDemoScenarioId] = useState<DemoScenarioId | null>(null);
+  const [executionPanelKey, setExecutionPanelKey] = useState(0);
 
   const travelSettingsSummary = useMemo(() => buildTravelSettingsSummary(travelSettings), [travelSettings]);
 
@@ -95,6 +98,49 @@ export default function Home() {
   function resetPlanSelection() {
     setSelectedPlanType("main");
     setSelectedFallbackIndex(null);
+  }
+
+  function resetDemoState() {
+    setGoal(DEMO_DEFAULT_STATE.goal);
+    setWechat(DEMO_DEFAULT_STATE.wechat);
+    setSeed(DEMO_DEFAULT_STATE.seed);
+    setTravelSettings(DEMO_DEFAULT_STATE.travelSettings);
+    setActiveDemoScenarioId(null);
+    resetPlanSelection();
+    setActiveSheetTab("main");
+    setSelectedPoiId(undefined);
+    setActiveStep(0);
+    setLoading(false);
+    setClarifyOpen(false);
+    setPendingParse(null);
+    setTravelSettingsOpen(false);
+    setIsPlanningOpen(false);
+    setPlanningStep(0);
+    setScreen("input");
+    setExecutionPanelKey((key) => key + 1);
+    setResult(runAgent(DEMO_DEFAULT_STATE.goal, DEMO_DEFAULT_STATE.wechat, DEMO_DEFAULT_STATE.seed));
+  }
+
+  function handleSelectDemoScenario(scenarioId: DemoScenarioId) {
+    const scenario = getDemoScenarioById(scenarioId);
+    if (!scenario) return;
+
+    setGoal(scenario.goal);
+    setWechat(scenario.wechat);
+    setSeed(scenario.seed);
+    setTravelSettings(scenario.travelSettings);
+    setActiveDemoScenarioId(scenarioId);
+    resetPlanSelection();
+    setActiveSheetTab("main");
+    setSelectedPoiId(undefined);
+    setActiveStep(0);
+    setLoading(false);
+    setClarifyOpen(false);
+    setPendingParse(null);
+    setIsPlanningOpen(false);
+    setPlanningStep(0);
+    setScreen("input");
+    setExecutionPanelKey((key) => key + 1);
   }
 
   function handleSelectFallbackPlan(index: number) {
@@ -235,10 +281,16 @@ export default function Home() {
                   seed={seed}
                   loading={loading}
                   travelSettingsSummary={travelSettingsSummary}
-                  onGoalChange={setGoal}
+                  activeDemoScenarioId={activeDemoScenarioId}
+                  onGoalChange={(value) => {
+                    setGoal(value);
+                    setActiveDemoScenarioId(null);
+                  }}
                   onWechatChange={setWechat}
                   onSeedChange={setSeed}
                   onOpenTravelSettings={openTravelSettings}
+                  onSelectDemoScenario={handleSelectDemoScenario}
+                  onResetDemo={resetDemoState}
                   onGenerate={handleGenerate}
                 />
               </div>
@@ -321,6 +373,7 @@ export default function Home() {
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
                 <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
                 <ExecutionPanel
+                  key={executionPanelKey}
                   routePlan={result.routePlan}
                   intent={result.parseResult.intent}
                   selectedPlanType={selectedPlanType}
