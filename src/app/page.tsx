@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
+import { AgentStepper } from "@/components/AgentStepper";
 import { BestPlanCard } from "@/components/BestPlanCard";
+import { PlanningModal } from "@/components/PlanningModal";
 import { ExecutionPanel } from "@/components/ExecutionPanel";
 import { InputPanel } from "@/components/InputPanel";
 import { IntentSummary } from "@/components/IntentSummary";
@@ -21,6 +23,7 @@ import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 type AppScreen = "input" | "result" | "details" | "execute";
 
 const STEP_COUNT = 6;
+const PLANNING_STEP_MS = 500;
 const LeafletPlannerMap = dynamic(() => import("@/components/LeafletPlannerMap").then((mod) => mod.LeafletPlannerMap), { ssr: false });
 
 function ScreenBackButton({ label, onClick }: { label: string; onClick: () => void }) {
@@ -49,6 +52,8 @@ export default function Home() {
   const [pendingParse, setPendingParse] = useState<ParseResult | null>(null);
   const [routePrefOpen, setRoutePrefOpen] = useState(false);
   const [pendingRoutePrefParse, setPendingRoutePrefParse] = useState<ParseResult | null>(null);
+  const [isPlanningOpen, setIsPlanningOpen] = useState(false);
+  const [planningStep, setPlanningStep] = useState(0);
 
   const mapPois = useMemo(() => result.rankedPois, [result]);
   const selectedPoi = useMemo(() => {
@@ -82,6 +87,15 @@ export default function Home() {
     setActiveStep(STEP_COUNT);
   }
 
+  function finishPlanning(nextResult: AgentResult) {
+    setResult(nextResult);
+    setPendingRoutePrefParse(null);
+    setActiveStep(STEP_COUNT);
+    setIsPlanningOpen(false);
+    setLoading(false);
+    setScreen("result");
+  }
+
   function handleGenerate() {
     setLoading(true);
     setActiveStep(1);
@@ -89,6 +103,7 @@ export default function Home() {
 
     const nextResult = runAgent(goal, wechat, seed);
     if (nextResult.parseResult.missingFields.length) {
+      setIsPlanningOpen(false);
       setPendingParse(nextResult.parseResult);
       setClarifyOpen(true);
       setLoading(false);
@@ -96,16 +111,26 @@ export default function Home() {
       return;
     }
 
-    setResult(nextResult);
-    setPendingRoutePrefParse(null);
-    setActiveStep(STEP_COUNT);
-    setLoading(false);
-    setScreen("result");
+    setIsPlanningOpen(true);
+    setPlanningStep(0);
+
+    let step = 0;
+    const tick = () => {
+      if (step < 3) {
+        step += 1;
+        setPlanningStep(step);
+        setActiveStep(step + 1);
+        window.setTimeout(tick, PLANNING_STEP_MS);
+        return;
+      }
+      window.setTimeout(() => finishPlanning(nextResult), PLANNING_STEP_MS);
+    };
+    window.setTimeout(tick, PLANNING_STEP_MS);
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 via-[#f5f6f8] to-slate-200 px-3 py-4">
-      <main className="mx-auto flex h-[844px] max-h-[calc(100vh-32px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-white/70 bg-[#f5f6f8] shadow-2xl">
+      <main className="relative mx-auto flex h-[844px] max-h-[calc(100vh-32px)] w-full max-w-[390px] flex-col overflow-hidden rounded-[32px] border border-white/70 bg-[#f5f6f8] shadow-2xl">
         <div className="flex shrink-0 items-center justify-center bg-white/85 px-4 py-3">
           <div className="h-1.5 w-24 rounded-full bg-black/12" />
         </div>
@@ -175,6 +200,7 @@ export default function Home() {
           {screen === "result" ? (
             <>
               <ScreenBackButton label="返回修改需求" onClick={() => setScreen("input")} />
+              <AgentStepper activeStep={activeStep} completed={!loading && activeStep >= STEP_COUNT} />
               <TripPersonaCard parseResult={result.parseResult} />
               <BestPlanCard
                 routePlan={result.routePlan}
@@ -211,6 +237,7 @@ export default function Home() {
             </>
           ) : null}
         </div>
+        <PlanningModal open={isPlanningOpen} step={planningStep} />
       </main>
     </div>
   );
