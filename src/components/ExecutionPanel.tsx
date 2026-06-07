@@ -47,6 +47,24 @@ function toReceiptLines(trace: ExecutionTraceStep[]) {
   return { receipts: uniqueReceipts, failures: uniqueFailures };
 }
 
+function summarizePayload(payload: unknown) {
+  if (!payload || typeof payload !== "object") return payload ? String(payload) : "无";
+  const record = payload as Record<string, unknown>;
+  const entries = Object.entries(record)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .slice(0, 4)
+    .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
+  return entries.length ? entries.join(" / ") : "无";
+}
+
+function extractReceiptIds(step: ExecutionTraceStep) {
+  const response = step.response as Record<string, unknown> | undefined;
+  if (!response) return [];
+  return ["reservationId", "orderId", "ticketId", "receiptId", "routeId", "messageId"]
+    .map((key) => (typeof response[key] === "string" ? `${key}: ${response[key]}` : ""))
+    .filter(Boolean);
+}
+
 async function copyTextSafely(text: string) {
   try {
     const permission = await navigator.permissions?.query?.({ name: "clipboard-write" as PermissionName });
@@ -72,16 +90,18 @@ async function copyTextSafely(text: string) {
 export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelProps) {
   const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
   const [running, setRunning] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(false);
   const [shareText, setShareText] = useState<string>("");
   const [receipts, setReceipts] = useState<string[]>([]);
   const [failures, setFailures] = useState<string[]>([]);
+  const completedTraceCount = trace.filter((step) => step.status === "success").length;
 
   return (
     <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
       <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold">执行面板</h2>
-          <p className="text-sm text-black/58">按工具调用链路模拟订位/预约/下单/发送。</p>
+          <h2 className="text-lg font-bold">确认并执行</h2>
+          <p className="text-sm text-black/58">AI 将模拟完成订座、下单、路线生成和计划发送。</p>
         </div>
         <button
           className="rounded-lg bg-meituan-yellow px-5 py-2.5 text-sm font-bold text-meituan-ink transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
@@ -109,19 +129,6 @@ export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelPro
         </button>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {(actions.length ? actions : [
-          { id: "coffee", label: "购买咖啡套餐" },
-          { id: "reserve", label: "预订餐厅" },
-          { id: "route", label: "生成路线" },
-          { id: "share", label: "发送给朋友" },
-        ]).map((action) => (
-          <span key={action.id} className="rounded-full border border-black/10 bg-meituan-gray px-3 py-1.5 text-sm font-semibold text-black/68">
-            {action.label}
-          </span>
-        ))}
-      </div>
-
       {shareText ? (
         <div className="mb-4 rounded-lg border border-meituan-yellow/40 bg-yellow-50 p-4">
           <div className="flex items-start justify-between gap-3">
@@ -139,7 +146,7 @@ export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelPro
       ) : null}
 
       {trace.length ? (
-        <div className="rounded-lg border border-black/10 bg-meituan-gray p-4">
+        <div className="mb-4 rounded-lg border border-black/10 bg-meituan-gray p-4">
           <p className="mb-2 font-bold text-black/80">执行结果</p>
           {receipts.length ? (
             <ul className="space-y-1 text-sm text-black/70">
@@ -162,6 +169,97 @@ export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelPro
           ) : null}
         </div>
       ) : null}
+
+      <div className="rounded-lg border border-black/10 bg-meituan-gray/70">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          onClick={() => setTraceOpen((open) => !open)}
+          aria-expanded={traceOpen}
+        >
+          <span>
+            <span className="block text-sm font-extrabold text-black/78">查看工具调用记录</span>
+            <span className="mt-1 block text-xs leading-5 text-black/50">
+              包含 CheckAvailability、ReserveTable、BuyDeal、GenerateShareText 等 mock tool 调用
+            </span>
+            {trace.length ? (
+              <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已完成 {completedTraceCount} 项执行动作，可展开查看详情</span>
+            ) : null}
+          </span>
+          <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-black/60 shadow-sm">
+            {traceOpen ? "收起" : "+ 展开"}
+          </span>
+        </button>
+
+        {traceOpen ? (
+          <div className="space-y-3 px-4 pb-4">
+            <div className="flex flex-wrap gap-2">
+              {(actions.length ? actions : [
+                { id: "coffee", label: "购买咖啡套餐" },
+                { id: "reserve", label: "预订餐厅" },
+                { id: "route", label: "生成路线" },
+                { id: "share", label: "发送给朋友" },
+              ]).map((action) => (
+                <span key={action.id} className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-sm font-semibold text-black/68">
+                  {action.label}
+                </span>
+              ))}
+            </div>
+
+            {trace.length ? (
+              <div className="space-y-2">
+                {trace.map((step) => {
+                  const receiptIds = extractReceiptIds(step);
+                  return (
+                    <div key={step.stepId} className="rounded-lg bg-white p-3 text-sm">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-extrabold text-black/80">{step.toolName}</p>
+                          <p className="text-xs font-bold uppercase text-black/38">
+                            {step.phase} · {step.status}
+                          </p>
+                        </div>
+                        <span
+                          className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${
+                            step.status === "success"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : step.status === "failed"
+                                ? "bg-rose-50 text-rose-700"
+                                : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {step.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 text-xs text-black/62 lg:grid-cols-2">
+                        <div className="rounded-md bg-meituan-gray px-3 py-2">
+                          <span className="font-bold text-black/70">Request：</span>
+                          {summarizePayload(step.request)}
+                        </div>
+                        <div className="rounded-md bg-meituan-gray px-3 py-2">
+                          <span className="font-bold text-black/70">Response：</span>
+                          {step.error?.message ?? summarizePayload(step.response)}
+                        </div>
+                      </div>
+                      {receiptIds.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {receiptIds.map((id) => (
+                            <span key={`${step.stepId}-${id}`} className="rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-bold text-black/65">
+                              {id}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-lg bg-white px-3 py-3 text-sm text-black/55">确认执行后，这里会显示完整 mock tool 调用记录。</p>
+            )}
+          </div>
+        ) : null}
+      </div>
     </section>
   );
 }
