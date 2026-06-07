@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
+import type { MapPresentation } from "@/lib/mapPresentation";
 import type { ScoredPoi } from "@/lib/types";
 
 type LeafletPlannerMapProps = {
   pois: ScoredPoi[];
   selectedPoiId?: string;
   onSelectPoi: (poi: ScoredPoi) => void;
-  routePoiIds: string[];
+  mapPresentation?: MapPresentation;
+  /** @deprecated use mapPresentation.activeRoutePoiIds */
+  routePoiIds?: string[];
   variant?: "default" | "hero";
   className?: string;
 };
@@ -28,19 +31,26 @@ const tileProviders = [
   { label: "OSM HOT", url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
 ];
 
-const levelColor = {
-  green: "#10b981",
-  yellow: "#f59e0b",
-  red: "#f43f5e",
-  gray: "#94a3b8",
-};
+const ROUTE_COLOR = "#FFC300";
+const ROUTE_COLOR_ALT = "#F59E0B";
+const HIGHLIGHT_COLOR = "#111827";
+const ALTERNATE_COLOR = "#FB923C";
 
-export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiIds, variant = "default", className = "" }: LeafletPlannerMapProps) {
+export function LeafletPlannerMap({
+  pois,
+  selectedPoiId,
+  onSelectPoi,
+  mapPresentation,
+  routePoiIds = [],
+  variant = "default",
+  className = "",
+}: LeafletPlannerMapProps) {
   const isHero = variant === "hero";
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
+  const labelLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const tileIndexRef = useRef(0);
   const tileErrorCountRef = useRef(0);
@@ -48,12 +58,42 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
   const [tileFailed, setTileFailed] = useState(false);
 
   const poiById = useMemo(() => new Map(pois.map((poi) => [poi.id, poi])), [pois]);
-  const routeLatLngs = useMemo(() => {
-    return routePoiIds
+
+  const activeRoutePoiIds = mapPresentation?.activeRoutePoiIds ?? routePoiIds;
+  const routeSegments = mapPresentation?.routeSegments ?? [];
+  const highlightedSet = useMemo(() => new Set(mapPresentation?.highlightedPoiIds ?? []), [mapPresentation?.highlightedPoiIds]);
+  const dimmedSet = useMemo(() => new Set(mapPresentation?.dimmedPoiIds ?? []), [mapPresentation?.dimmedPoiIds]);
+  const alternateSet = useMemo(() => new Set(mapPresentation?.alternatePoiIds ?? []), [mapPresentation?.alternatePoiIds]);
+  const routeOrderMap = useMemo(() => new Map(activeRoutePoiIds.map((id, index) => [id, index + 1])), [activeRoutePoiIds]);
+  const mapHint = mapPresentation?.mapHint;
+
+  const segmentGeometries = useMemo(() => {
+    if (routeSegments.length) {
+      return routeSegments
+        .map((segment) => {
+          const from = poiById.get(segment.fromPoiId);
+          const to = poiById.get(segment.toPoiId);
+          if (!from || !to) return null;
+          return {
+            segmentIndex: segment.segmentIndex,
+            latlngs: [toLatLng(from), toLatLng(to)],
+          };
+        })
+        .filter(Boolean) as { segmentIndex: number; latlngs: L.LatLng[] }[];
+    }
+
+    const latlngs = activeRoutePoiIds
       .map((id) => poiById.get(id))
       .filter(Boolean)
       .map((poi) => toLatLng(poi as ScoredPoi));
-  }, [poiById, routePoiIds]);
+
+    if (latlngs.length < 2) return [];
+    const fallbackSegments: { segmentIndex: number; latlngs: L.LatLng[] }[] = [];
+    for (let i = 0; i < latlngs.length - 1; i += 1) {
+      fallbackSegments.push({ segmentIndex: i + 1, latlngs: [latlngs[i], latlngs[i + 1]] });
+    }
+    return fallbackSegments;
+  }, [activeRoutePoiIds, poiById, routeSegments]);
 
   useEffect(() => {
     if (!hostRef.current || mapRef.current) return;
@@ -96,6 +136,7 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
 
     markerLayerRef.current = L.layerGroup().addTo(map);
     routeLayerRef.current = L.layerGroup().addTo(map);
+    labelLayerRef.current = L.layerGroup().addTo(map);
 
     map.setView([39.909, 116.397], 13);
     map.whenReady(() => {
@@ -107,38 +148,72 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
   }, []);
 
   useEffect(() => {
-    if (!mapRef.current || !markerLayerRef.current) return;
+    if (!mapRef.current || !markerLayerRef.current || !labelLayerRef.current) return;
     markerLayerRef.current.clearLayers();
+    labelLayerRef.current.clearLayers();
 
     for (const poi of pois) {
       const latlng = toLatLng(poi);
       const selected = poi.id === selectedPoiId;
-      const color = levelColor[poi.level];
+      const onRoute = routeOrderMap.has(poi.id);
+      const isAlternate = alternateSet.has(poi.id);
+      const isDimmed = dimmedSet.has(poi.id) && !onRoute && !selected;
+      const isHighlighted = highlightedSet.has(poi.id) || onRoute;
+
+      const fillColor = isAlternate ? ALTERNATE_COLOR : isHighlighted ? ROUTE_COLOR : "#94a3b8";
+      const radius = selected ? 11 : onRoute ? 10 : isHighlighted ? 8 : 6;
+      const weight = selected ? 3 : onRoute ? 2.5 : 2;
+      const fillOpacity = isDimmed ? 0.35 : 0.92;
+      const color = selected ? HIGHLIGHT_COLOR : isAlternate ? "#C2410C" : "#ffffff";
 
       const marker = L.circleMarker(latlng, {
-        radius: selected ? 10 : 7,
-        color: selected ? "#111827" : color,
-        weight: selected ? 3 : 2,
-        fillColor: color,
-        fillOpacity: 0.9,
+        radius,
+        color,
+        weight,
+        fillColor,
+        fillOpacity,
       });
 
       marker.on("click", () => onSelectPoi(poi));
-      marker.bindTooltip(`${poi.name} · ${poi.goabilityScore}分`, { direction: "top", offset: [0, -8] });
+      const routeLabel = routeOrderMap.get(poi.id);
+      const tooltip = routeLabel
+        ? `${routeLabel}. ${poi.name} · ${poi.goabilityScore}分`
+        : `${poi.name} · ${poi.goabilityScore}分`;
+      marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8] });
       marker.addTo(markerLayerRef.current);
+
+      if (routeLabel) {
+        const badge = L.divIcon({
+          className: "map-route-badge",
+          html: `<span style="display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:9999px;background:#111827;color:#FFC300;font-size:10px;font-weight:800;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.2)">${routeLabel}</span>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        });
+        L.marker(latlng, { icon: badge, interactive: false }).addTo(labelLayerRef.current);
+      }
     }
-  }, [pois, onSelectPoi, selectedPoiId]);
+  }, [pois, onSelectPoi, selectedPoiId, routeOrderMap, highlightedSet, dimmedSet, alternateSet]);
 
   useEffect(() => {
     if (!mapRef.current || !routeLayerRef.current) return;
     routeLayerRef.current.clearLayers();
 
-    if (routeLatLngs.length >= 2) {
-      const polyline = L.polyline(routeLatLngs, { color: "#2563eb", weight: 4, opacity: 0.85 });
+    const boundsPoints: L.LatLng[] = [];
+    for (const segment of segmentGeometries) {
+      const polyline = L.polyline(segment.latlngs, {
+        color: segment.segmentIndex % 2 === 0 ? ROUTE_COLOR_ALT : ROUTE_COLOR,
+        weight: 5,
+        opacity: 0.9,
+        lineCap: "round",
+      });
       polyline.addTo(routeLayerRef.current);
-      mapRef.current.fitBounds(polyline.getBounds().pad(0.2));
+      boundsPoints.push(...segment.latlngs);
     }
-  }, [routeLatLngs]);
+
+    if (boundsPoints.length >= 2) {
+      mapRef.current.fitBounds(L.latLngBounds(boundsPoints).pad(0.18));
+    }
+  }, [segmentGeometries]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -151,11 +226,19 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
   }, [variant, className]);
 
   const legend = (
-    <div className={`flex flex-wrap gap-2 text-xs text-black/60 ${isHero ? "gap-1.5 text-[10px]" : ""}`}>
-      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.green }} />推荐</span>
-      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.yellow }} />可选</span>
-      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.red }} />不建议</span>
-      <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-full" style={{ background: levelColor.gray }} />不可用</span>
+    <div className={`flex flex-wrap gap-x-3 gap-y-1 text-black/60 ${isHero ? "text-[10px]" : "text-xs"}`}>
+      <span className="inline-flex items-center gap-1">
+        <i className="inline-block h-0.5 w-4 rounded-full" style={{ background: ROUTE_COLOR }} />
+        当前路线
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ROUTE_COLOR }} />
+        推荐点
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ALTERNATE_COLOR }} />
+        备选点
+      </span>
     </div>
   );
 
@@ -168,6 +251,7 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
         />
         <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-lg bg-white/92 px-2 py-1.5 shadow-sm backdrop-blur-sm">
           {legend}
+          {mapHint ? <p className="mt-1 max-w-[220px] text-[9px] leading-4 text-black/45">{mapHint}</p> : null}
         </div>
         {tileFailed ? (
           <div className="absolute inset-0 z-[4] grid place-items-center bg-slate-50 text-center">
@@ -187,6 +271,7 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
         <div>
           <h2 className="text-base font-bold">动态规划地图</h2>
           <p className="text-xs text-black/58">底图：{tileLabel}（本地 Demo），点位与信息为 mock。</p>
+          {mapHint ? <p className="mt-1 text-[10px] leading-4 text-black/45">{mapHint}</p> : null}
         </div>
         {legend}
       </div>

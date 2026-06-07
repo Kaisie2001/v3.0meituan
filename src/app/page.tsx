@@ -26,6 +26,7 @@ import {
 } from "@/lib/preferenceSummary";
 import { buildExecutionPlanLabel, buildSelectedPlanSummary } from "@/lib/executionContext";
 import { DEMO_DEFAULT_STATE, getDemoScenarioById, type DemoScenarioId } from "@/lib/demoScenarios";
+import { buildMapPresentation } from "@/lib/mapPresentation";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
 type AppScreen = "input" | "result" | "details" | "execute";
@@ -183,17 +184,25 @@ export default function Home() {
     }
   }
 
-  const mapPois = useMemo(() => result.rankedPois, [result]);
+  const mapPresentation = useMemo(
+    () =>
+      buildMapPresentation({
+        routePlan: result.routePlan,
+        rankedPois: result.rankedPois,
+        parseResult: result.parseResult,
+        selectedPlanType,
+        selectedFallbackIndex,
+        selectedPoiId,
+        travelSettings,
+      }),
+    [result.routePlan, result.rankedPois, result.parseResult, selectedPlanType, selectedFallbackIndex, selectedPoiId, travelSettings],
+  );
+
+  const mapPois = useMemo(() => mapPresentation.visiblePois, [mapPresentation]);
   const selectedPoi = useMemo(() => {
     if (!selectedPoiId) return undefined;
-    return result.rankedPois.find((poi) => poi.id === selectedPoiId);
-  }, [result, selectedPoiId]);
-  const routePoiIds = useMemo(() => {
-    const ids =
-      result.routePlan.mainPlan?.slots.map((slot) => slot.poi?.id).filter((id): id is string => typeof id === "string" && id.length > 0) ?? [];
-    if (ids.length >= 2) return [...ids, ids[0]];
-    return ids;
-  }, [result.routePlan]);
+    return mapPois.find((poi) => poi.id === selectedPoiId) ?? result.rankedPois.find((poi) => poi.id === selectedPoiId);
+  }, [mapPois, result.rankedPois, selectedPoiId]);
 
   function handleSelectPoi(poi: ScoredPoi) {
     setSelectedPoiId(poi.id);
@@ -305,7 +314,7 @@ export default function Home() {
                     pois={mapPois}
                     selectedPoiId={selectedPoiId}
                     onSelectPoi={handleSelectPoi}
-                    routePoiIds={routePoiIds}
+                    mapPresentation={mapPresentation}
                   />
                 </div>
 
@@ -347,7 +356,12 @@ export default function Home() {
             {screen === "details" ? (
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
                 <ScreenBackButton label="返回主方案" onClick={() => setScreen("result")} />
-                <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
+                <LeafletPlannerMap
+                  pois={mapPois}
+                  selectedPoiId={selectedPoiId}
+                  onSelectPoi={handleSelectPoi}
+                  mapPresentation={mapPresentation}
+                />
                 <RouteTimeline
                   routePlan={result.routePlan}
                   parseResult={result.parseResult}
