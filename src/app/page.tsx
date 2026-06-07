@@ -12,22 +12,17 @@ import { RecommendationPanel } from "@/components/RecommendationPanel";
 import { RouteTimeline } from "@/components/RouteTimeline";
 import { TripPersonaCard } from "@/components/TripPersonaCard";
 import { ClarifyModal } from "@/components/ClarifyModal";
-import { TimePickerSheet } from "@/components/TimePickerSheet";
-import { RoutePreferenceModal } from "@/components/RoutePreferenceModal";
+import { TravelSettingsSheet } from "@/components/TravelSettingsSheet";
 import { defaultInputs, parseInput } from "@/lib/parseIntent";
 import { runAgent, runAgentFromParseResult } from "@/lib/runAgent";
 import { applyParseOverrides } from "@/lib/parsers/applyOverrides";
 import { applyRoutePrefs } from "@/lib/parsers/applyRoutePrefs";
 import {
-  buildGoalWithTimeContext,
-  buildTimePickerCardSummary,
-  buildTimeWindowSummary,
-  DEFAULT_PREFERENCE_SUMMARY,
-  DEFAULT_TIME_PICKER,
-  DEFAULT_TIME_WINDOW_SUMMARY,
-  inferDefaultStartTime,
-  type PreferenceSubmitPayload,
-  type TimePickerValue,
+  buildGoalWithTravelSettings,
+  buildTravelSettingsSummary,
+  DEFAULT_TRAVEL_SETTINGS,
+  travelSettingsToPreferencePayload,
+  type TravelSettings,
 } from "@/lib/preferenceSummary";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
@@ -61,20 +56,15 @@ export default function Home() {
   const [selectedPoiId, setSelectedPoiId] = useState<string | undefined>(undefined);
   const [clarifyOpen, setClarifyOpen] = useState(false);
   const [pendingParse, setPendingParse] = useState<ParseResult | null>(null);
-  const [routePrefOpen, setRoutePrefOpen] = useState(false);
-  const [preferencesConfigured, setPreferencesConfigured] = useState(false);
-  const [preferenceSummaryText, setPreferenceSummaryText] = useState(DEFAULT_PREFERENCE_SUMMARY);
-  const [timeWindowSummaryText, setTimeWindowSummaryText] = useState(
-    buildTimeWindowSummary({ timePicker: DEFAULT_TIME_PICKER, preferenceSummary: DEFAULT_PREFERENCE_SUMMARY }),
-  );
-  const [timePickerValue, setTimePickerValue] = useState<TimePickerValue>(DEFAULT_TIME_PICKER);
-  const [timePickerOpen, setTimePickerOpen] = useState(false);
-  const [savedPreferencePayload, setSavedPreferencePayload] = useState<PreferenceSubmitPayload | null>(null);
+  const [travelSettings, setTravelSettings] = useState<TravelSettings>(DEFAULT_TRAVEL_SETTINGS);
+  const [travelSettingsOpen, setTravelSettingsOpen] = useState(false);
   const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [planningStep, setPlanningStep] = useState(0);
   const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("main");
   const [selectedPlanType, setSelectedPlanType] = useState<SelectedPlanType>("main");
   const [selectedFallbackIndex, setSelectedFallbackIndex] = useState<number | null>(null);
+
+  const travelSettingsSummary = useMemo(() => buildTravelSettingsSummary(travelSettings), [travelSettings]);
 
   const executionPlanLabel = useMemo(() => {
     if (selectedPlanType === "fallback" && selectedFallbackIndex !== null) {
@@ -109,51 +99,24 @@ export default function Home() {
     resetPlanSelection();
   }
 
-  const timePickerCardSummary = useMemo(() => buildTimePickerCardSummary(timePickerValue), [timePickerValue]);
-
-  function refreshTimeWindowSummary(preferenceSummary = preferenceSummaryText) {
-    setTimeWindowSummaryText(
-      buildTimeWindowSummary({
-        timePicker: timePickerValue,
-        preferenceSummary,
-      }),
-    );
-  }
-
-  function openTimePicker() {
-    setTimePickerValue((prev) => ({
-      ...prev,
-      startTime: prev.startTime || inferDefaultStartTime(goal),
-    }));
-    setTimePickerOpen(true);
-  }
-
-  function handleTimePickerConfirm(nextValue: TimePickerValue) {
-    setTimePickerValue(nextValue);
-    setTimePickerOpen(false);
-    refreshTimeWindowSummary();
-  }
-
-  function applyPreferencePayload(parseResult: ParseResult, payload: PreferenceSubmitPayload) {
+  function applyTravelSettingsToResult(parseResult: ParseResult, settings: TravelSettings) {
+    const payload = travelSettingsToPreferencePayload(settings);
     const withTime = applyParseOverrides(parseResult, payload.intentPatch);
     const withPrefs = applyRoutePrefs(withTime, payload.routePrefs);
     return runAgentFromParseResult(withPrefs);
   }
 
-  function openRoutePreferences() {
-    setRoutePrefOpen(true);
+  function openTravelSettings() {
+    setTravelSettingsOpen(true);
   }
 
-  function handlePreferenceSubmit(payload: PreferenceSubmitPayload) {
-    setSavedPreferencePayload(payload);
-    setPreferencesConfigured(true);
-    setPreferenceSummaryText(payload.displaySummary);
-    setRoutePrefOpen(false);
+  function handleTravelSettingsSubmit(nextSettings: TravelSettings) {
+    setTravelSettings(nextSettings);
+    setTravelSettingsOpen(false);
 
     if (screen === "result" || screen === "execute" || screen === "details") {
-      const nextResult = applyPreferencePayload(result.parseResult, payload);
+      const nextResult = applyTravelSettingsToResult(result.parseResult, nextSettings);
       setResult(nextResult);
-      refreshTimeWindowSummary(payload.displaySummary);
       setSelectedPoiId(undefined);
       setActiveStep(STEP_COUNT);
       setActiveSheetTab("main");
@@ -163,17 +126,6 @@ export default function Home() {
       }
     }
   }
-
-  function resetPreferences() {
-    setSavedPreferencePayload(null);
-    setPreferencesConfigured(false);
-    setPreferenceSummaryText(DEFAULT_PREFERENCE_SUMMARY);
-    setTimeWindowSummaryText(
-      buildTimeWindowSummary({ timePicker: timePickerValue, preferenceSummary: DEFAULT_PREFERENCE_SUMMARY }),
-    );
-  }
-
-  const routePrefInitialDraft = useMemo(() => parseInput(goal, wechat, seed).draft, [goal, wechat, seed]);
 
   const mapPois = useMemo(() => result.rankedPois, [result]);
   const selectedPoi = useMemo(() => {
@@ -227,10 +179,9 @@ export default function Home() {
     setSelectedPoiId(undefined);
     resetPlanSelection();
 
-    const goalForAgent = buildGoalWithTimeContext(goal, timePickerValue);
+    const goalForAgent = buildGoalWithTravelSettings(goal, travelSettings);
     const baseResult = runAgent(goalForAgent, wechat, seed);
-    const nextResult = savedPreferencePayload ? applyPreferencePayload(baseResult.parseResult, savedPreferencePayload) : baseResult;
-    refreshTimeWindowSummary();
+    const nextResult = applyTravelSettingsToResult(baseResult.parseResult, travelSettings);
 
     if (nextResult.parseResult.missingFields.length) {
       setIsPlanningOpen(false);
@@ -273,14 +224,12 @@ export default function Home() {
                   wechat={wechat}
                   seed={seed}
                   loading={loading}
-                  timeSummary={timePickerCardSummary}
+                  travelSettingsSummary={travelSettingsSummary}
                   onGoalChange={setGoal}
                   onWechatChange={setWechat}
                   onSeedChange={setSeed}
-                  onOpenTimePicker={openTimePicker}
+                  onOpenTravelSettings={openTravelSettings}
                   onGenerate={handleGenerate}
-                  onOpenRoutePreferences={openRoutePreferences}
-                  hasRoutePreferences={preferencesConfigured}
                 />
               </div>
             ) : null}
@@ -311,10 +260,9 @@ export default function Home() {
                     onSelectMainPlan={handleSelectMainPlan}
                     onSelectFallbackPlan={handleSelectFallbackPlan}
                     onConfirmExecute={() => setScreen("execute")}
-                    preferenceSummary={preferenceSummaryText}
-                    timeWindowSummary={timeWindowSummaryText}
-                    timePickerValue={timePickerValue}
-                    onOpenRoutePreferences={openRoutePreferences}
+                    travelSettings={travelSettings}
+                    travelSettingsSummary={travelSettingsSummary}
+                    onOpenTravelSettings={openTravelSettings}
                   />
                 </div>
 
@@ -371,11 +319,11 @@ export default function Home() {
               </div>
             ) : null}
 
-            <TimePickerSheet
-              open={timePickerOpen}
-              value={timePickerValue}
-              onClose={() => setTimePickerOpen(false)}
-              onConfirm={handleTimePickerConfirm}
+            <TravelSettingsSheet
+              open={travelSettingsOpen}
+              value={travelSettings}
+              onClose={() => setTravelSettingsOpen(false)}
+              onSubmit={handleTravelSettingsSubmit}
             />
             <ClarifyModal
               open={clarifyOpen}
@@ -388,12 +336,8 @@ export default function Home() {
               onSubmit={(patch) => {
                 if (!pendingParse) return;
                 const patchedParse = applyParseOverrides(pendingParse, patch);
-                let nextResult = runAgentFromParseResult(patchedParse);
-                if (savedPreferencePayload) {
-                  nextResult = applyPreferencePayload(nextResult.parseResult, savedPreferencePayload);
-                }
+                const nextResult = applyTravelSettingsToResult(patchedParse, travelSettings);
                 setResult(nextResult);
-                refreshTimeWindowSummary();
                 setSelectedPoiId(undefined);
                 setClarifyOpen(false);
                 setPendingParse(null);
@@ -402,13 +346,6 @@ export default function Home() {
                 resetPlanSelection();
                 setScreen("result");
               }}
-            />
-            <RoutePreferenceModal
-              open={routePrefOpen}
-              initialIntent={result.parseResult.intent}
-              initialDraft={routePrefInitialDraft}
-              onClose={() => setRoutePrefOpen(false)}
-              onSubmit={handlePreferenceSubmit}
             />
             <PlanningModal open={isPlanningOpen} step={planningStep} />
           </div>

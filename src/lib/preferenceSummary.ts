@@ -1,4 +1,4 @@
-import type { Intent, ParseResult, RoutePreferences } from "./types";
+import type { Intent, OptimizeGoal, ParseResult, RoutePreferences } from "./types";
 
 export const DEFAULT_PREFERENCE_SUMMARY = "系统按时间、距离、排队风险综合规划";
 
@@ -31,6 +31,47 @@ export const DEFAULT_TIME_PICKER: TimePickerValue = {
   date: "today",
   startTime: "14:00",
   duration: "3h",
+};
+
+export type TransportModeChoice = "transit" | "walking" | "driving" | "auto";
+export type RoutePriorityChoice = "time" | "distance" | "cost" | "queue" | "detour" | "experience";
+
+export type TravelSettings = {
+  date: TripDateOption;
+  startTime: string;
+  duration: TripDurationOption;
+  transportMode: TransportModeChoice;
+  routePriority: RoutePriorityChoice;
+  partySize: number;
+  budget: number;
+  maxCommute: number;
+};
+
+export const TRANSPORT_MODE_LABELS: Record<TransportModeChoice, string> = {
+  transit: "公共交通优先",
+  walking: "步行优先",
+  driving: "打车/驾车",
+  auto: "系统综合推荐",
+};
+
+export const ROUTE_PRIORITY_LABELS: Record<RoutePriorityChoice, string> = {
+  time: "时间最短",
+  distance: "少走路",
+  cost: "预算优先",
+  queue: "少排队",
+  detour: "少绕路",
+  experience: "体验优先",
+};
+
+export const DEFAULT_TRAVEL_SETTINGS: TravelSettings = {
+  date: "today",
+  startTime: "14:00",
+  duration: "3h",
+  transportMode: "transit",
+  routePriority: "queue",
+  partySize: 2,
+  budget: 150,
+  maxCommute: 30,
 };
 
 export type PreferenceSubmitPayload = {
@@ -244,4 +285,76 @@ export function buildTimeWindowSummary(params: {
     preferenceSummary: params.preferenceSummary,
     hasExplicitTimeWindow: true,
   });
+}
+
+export function travelSettingsToTimePickerValue(settings: TravelSettings): TimePickerValue {
+  return {
+    date: settings.date,
+    startTime: settings.startTime,
+    duration: settings.duration,
+  };
+}
+
+function routePriorityToRoutePrefs(priority: RoutePriorityChoice): Pick<RoutePreferences, "goal" | "customGoal"> {
+  switch (priority) {
+    case "queue":
+      return { goal: "custom", customGoal: "少排队" };
+    case "detour":
+      return { goal: "custom", customGoal: "少绕路" };
+    case "experience":
+      return { goal: "custom", customGoal: "体验优先" };
+    case "distance":
+      return { goal: "distance" };
+    case "cost":
+      return { goal: "cost" };
+    default:
+      return { goal: "time" };
+  }
+}
+
+export function buildTravelSettingsSummary(settings: TravelSettings) {
+  const parts = [
+    `${getDateLabel(settings.date)} ${settings.startTime}`,
+    getDurationLabel(settings.duration),
+    TRANSPORT_MODE_LABELS[settings.transportMode] ?? TRANSPORT_MODE_LABELS.auto,
+    ROUTE_PRIORITY_LABELS[settings.routePriority] ?? ROUTE_PRIORITY_LABELS.time,
+  ];
+  return buildPreferenceSummaryFromLabels(parts);
+}
+
+export function travelSettingsToPreferencePayload(settings: TravelSettings): PreferenceSubmitPayload {
+  const routeGoal = routePriorityToRoutePrefs(settings.routePriority);
+  const resolvedTransport = settings.transportMode === "auto" ? "transit" : settings.transportMode;
+  const summaryLabels = [
+    settings.transportMode === "auto" ? TRANSPORT_MODE_LABELS.auto : TRANSPORT_MODE_LABELS[resolvedTransport],
+    ROUTE_PRIORITY_LABELS[settings.routePriority],
+  ];
+  if (settings.routePriority === "queue") {
+    summaryLabels.push("不想排太久");
+  }
+
+  return {
+    routePrefs: {
+      transport: resolvedTransport,
+      goal: routeGoal.goal as OptimizeGoal,
+      customGoal: routeGoal.customGoal,
+    },
+    intentPatch: {
+      startTime: settings.startTime,
+      durationMinutes: durationToMinutes(settings.duration),
+      maxCommuteMinutes: settings.maxCommute,
+      partySize: settings.partySize,
+      budgetPerPerson: settings.budget,
+    },
+    displaySummary: buildTravelSettingsSummary(settings),
+  };
+}
+
+export function buildGoalWithTravelSettings(goal: string, settings: TravelSettings) {
+  const withTime = buildGoalWithTimeContext(goal, travelSettingsToTimePickerValue(settings)).trim();
+  const transportLabel = TRANSPORT_MODE_LABELS[settings.transportMode] ?? TRANSPORT_MODE_LABELS.auto;
+  const priorityLabel = ROUTE_PRIORITY_LABELS[settings.routePriority] ?? ROUTE_PRIORITY_LABELS.time;
+  const constraintSuffix = `出行方式：${transportLabel}；路线优先级：${priorityLabel}；预算：人均${settings.budget}以内；人数：${settings.partySize}人；最远通勤：${settings.maxCommute}分钟。`;
+  const base = withTime.endsWith("。") ? withTime.slice(0, -1) : withTime;
+  return `${base}；${constraintSuffix}`;
 }

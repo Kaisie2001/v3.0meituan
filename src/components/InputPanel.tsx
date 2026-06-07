@@ -15,14 +15,12 @@ type InputPanelProps = {
   wechat: string;
   seed: string;
   loading: boolean;
-  timeSummary: string;
+  travelSettingsSummary: string;
   onGoalChange: (value: string) => void;
   onWechatChange: (value: string) => void;
   onSeedChange: (value: string) => void;
-  onOpenTimePicker: () => void;
+  onOpenTravelSettings: () => void;
   onGenerate: () => void;
-  onOpenRoutePreferences?: () => void;
-  hasRoutePreferences?: boolean;
 };
 
 export function InputPanel({
@@ -30,14 +28,12 @@ export function InputPanel({
   wechat,
   seed,
   loading,
-  timeSummary,
+  travelSettingsSummary,
   onGoalChange,
   onWechatChange,
   onSeedChange,
-  onOpenTimePicker,
+  onOpenTravelSettings,
   onGenerate,
-  onOpenRoutePreferences,
-  hasRoutePreferences,
 }: InputPanelProps) {
   const [wechatOpen, setWechatOpen] = useState(false);
   const [seedOpen, setSeedOpen] = useState(false);
@@ -82,12 +78,12 @@ export function InputPanel({
 
         <button
           type="button"
-          onClick={onOpenTimePicker}
+          onClick={onOpenTravelSettings}
           className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5 text-left transition hover:border-meituan-yellow/60 hover:bg-yellow-50/40"
         >
           <span className="min-w-0">
-            <span className="block text-xs font-bold text-black/45">出行时间</span>
-            <span className="mt-0.5 block truncate text-sm font-extrabold text-meituan-ink">{timeSummary}</span>
+            <span className="block text-xs font-bold text-black/45">出行设置</span>
+            <span className="mt-0.5 block truncate text-sm font-extrabold text-meituan-ink">{travelSettingsSummary}</span>
           </span>
           <span className="shrink-0 text-xs font-bold text-meituan-ink">修改</span>
         </button>
@@ -100,19 +96,6 @@ export function InputPanel({
         >
           {loading ? "规划中..." : "一键 AI 规划"}
         </button>
-        {onOpenRoutePreferences ? (
-          <button
-            type="button"
-            className="flex w-full items-center justify-between rounded-lg border border-black/8 bg-white px-3 py-2.5 text-left transition hover:border-meituan-yellow/50 hover:bg-yellow-50/40 sm:w-auto"
-            onClick={() => onOpenRoutePreferences?.()}
-          >
-            <span>
-              <span className="block text-sm font-bold text-black/75">设置出行偏好</span>
-              <span className="mt-0.5 block text-xs text-black/50">出行方式、路线优先级、时间与人均预算</span>
-            </span>
-            <span className="shrink-0 text-xs font-bold text-meituan-ink">{hasRoutePreferences ? "已设置" : "去设置"}</span>
-          </button>
-        ) : null}
       </div>
 
       <div className="mt-4 space-y-3">

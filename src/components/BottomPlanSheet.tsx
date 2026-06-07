@@ -18,7 +18,8 @@ import {
   getPoiTimeDynamicHint,
   type TimeWindowEffectsSummary,
 } from "@/lib/timeWindowEffects";
-import type { TimePickerValue } from "@/lib/preferenceSummary";
+import type { TravelSettings } from "@/lib/preferenceSummary";
+import { travelSettingsToTimePickerValue } from "@/lib/preferenceSummary";
 import type { ItineraryPlan, ParseResult, RoutePlan, RouteSlot, ScoredPoi } from "@/lib/types";
 
 export type SheetTab = "main" | "fallback" | "poi";
@@ -36,10 +37,9 @@ type BottomPlanSheetProps = {
   onSelectMainPlan: () => void;
   onSelectFallbackPlan: (index: number) => void;
   onConfirmExecute?: () => void;
-  preferenceSummary?: string;
-  timeWindowSummary?: string;
-  timePickerValue?: TimePickerValue;
-  onOpenRoutePreferences?: () => void;
+  travelSettings?: TravelSettings;
+  travelSettingsSummary?: string;
+  onOpenTravelSettings?: () => void;
 };
 
 type CurrentPlanSummary = {
@@ -216,9 +216,8 @@ function MainTabContent({
   guidance,
   timeEffects,
   parseResult,
-  preferenceSummary,
-  timeWindowSummary,
-  onOpenRoutePreferences,
+  travelSettingsSummary,
+  onOpenTravelSettings,
   switchFeedback,
   onConfirmExecute,
   onViewFallback,
@@ -228,16 +227,15 @@ function MainTabContent({
   guidance: RouteGuidanceSummary;
   timeEffects: TimeWindowEffectsSummary;
   parseResult: ParseResult;
-  preferenceSummary?: string;
-  timeWindowSummary?: string;
-  onOpenRoutePreferences?: () => void;
+  travelSettingsSummary?: string;
+  onOpenTravelSettings?: () => void;
   switchFeedback: string | null;
   onConfirmExecute?: () => void;
   onViewFallback: () => void;
   onSelectMainPlan: () => void;
 }) {
   const displaySlots = summary.slots.slice(0, 2);
-  const constraintText = timeWindowSummary ?? preferenceSummary ?? "系统综合推荐 · 按时间、距离、排队风险综合规划";
+  const constraintText = travelSettingsSummary ?? "今天 14:00 · 3小时 · 系统综合规划";
   const fallbackTimeNote = summary.isFallback ? buildFallbackSwitchNote(summary.planTitle, timeEffects) : null;
 
   return (
@@ -268,10 +266,10 @@ function MainTabContent({
             >
               恢复主方案
             </button>
-          ) : onOpenRoutePreferences ? (
+          ) : onOpenTravelSettings ? (
             <button
               type="button"
-              onClick={() => onOpenRoutePreferences?.()}
+              onClick={() => onOpenTravelSettings?.()}
               className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
             >
               调整
@@ -780,14 +778,18 @@ export function BottomPlanSheet({
   onSelectMainPlan,
   onSelectFallbackPlan,
   onConfirmExecute,
-  preferenceSummary,
-  timeWindowSummary,
-  timePickerValue,
-  onOpenRoutePreferences,
+  travelSettings,
+  travelSettingsSummary,
+  onOpenTravelSettings,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
   const [fallbackDetailIndex, setFallbackDetailIndex] = useState<number | null>(null);
   const [switchFeedback, setSwitchFeedback] = useState<string | null>(null);
+
+  const timePickerValue = useMemo(
+    () => (travelSettings ? travelSettingsToTimePickerValue(travelSettings) : undefined),
+    [travelSettings],
+  );
 
   const timeEffects = useMemo(() => buildTimeWindowEffects(timePickerValue), [timePickerValue]);
 
@@ -862,9 +864,8 @@ export function BottomPlanSheet({
             guidance={routeGuidance}
             timeEffects={timeEffects}
             parseResult={parseResult}
-            preferenceSummary={preferenceSummary}
-            timeWindowSummary={timeWindowSummary}
-            onOpenRoutePreferences={onOpenRoutePreferences}
+            travelSettingsSummary={travelSettingsSummary}
+            onOpenTravelSettings={onOpenTravelSettings}
             switchFeedback={switchFeedback}
             onConfirmExecute={onConfirmExecute}
             onViewFallback={() => {
