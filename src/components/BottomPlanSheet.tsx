@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getFallbackPersonaReason, getPersonaConfig, getPersonaSlotLabel } from "@/lib/persona";
 import {
   buildPlanComparison,
@@ -63,6 +63,12 @@ type CurrentPlanSummary = {
   strategyNote: string;
 };
 
+type RouteStepPreview = {
+  label: string;
+  name: string;
+  timeRange?: string;
+};
+
 const tabs: { id: SheetTab; label: string }[] = [
   { id: "main", label: "主方案" },
   { id: "fallback", label: "备选方案" },
@@ -108,16 +114,14 @@ function buildCurrentPlanSummary(
     const plan = fallbackPlans[selectedFallbackIndex];
     const fallbackDisplay = getFallbackDisplay(comparison, selectedFallbackIndex);
     if (plan && fallbackDisplay) {
-      const slots = plan.slots?.slice(0, 3) ?? [];
+      const slots = plan.slots ?? [];
       const rationaleNotes = plan.slots?.flatMap((slot) => slot.rationaleNotes) ?? [];
 
       return {
         usageLabel: `当前使用：${plan.title}`,
         isFallback: true,
         planTitle: plan.title,
-        triggerNote: plan.trigger
-          ? `因${plan.trigger.split("/")[0]?.trim() ?? plan.trigger}，已切换为等待更短的备选。`
-          : "因主方案可能排队过长，已切换为等待更短的备选。",
+        triggerNote: "已切换为等待更短的备选方案。",
         mapNote: `地图仍显示整体候选路线，当前执行方案已切换为${plan.title}。`,
         overallScore: fallbackDisplay.overallScore,
         safetyScore: fallbackDisplay.safetyScore,
@@ -129,16 +133,14 @@ function buildCurrentPlanSummary(
         totalWaitMinutes: formatMetric(plan.totalWaitMinutes, FALLBACK_METRIC_TEXT),
         slots,
         slotFallbackText: slots.length ? undefined : FALLBACK_SLOT_TEXT,
-        reasons: rationaleNotes.length
-          ? rationaleNotes.slice(0, 3)
-          : [getFallbackPersonaReason(parseResult)],
+        reasons: rationaleNotes.length ? rationaleNotes.slice(0, 3) : [getFallbackPersonaReason(parseResult)],
         strategyNote,
       };
     }
   }
 
   const mainPlan = routePlan.mainPlan;
-  const slots = mainPlan?.slots?.slice(0, 3) ?? [];
+  const slots = mainPlan?.slots ?? [];
 
   return {
     usageLabel: "当前使用：主方案",
@@ -161,45 +163,93 @@ function buildCurrentPlanSummary(
   };
 }
 
-function RouteGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
+function buildRouteThreeSteps(slots: RouteSlot[], parseResult: ParseResult): RouteStepPreview[] {
+  if (!slots.length) {
+    return [{ label: "路线", name: "暂无节点" }];
+  }
+
+  const activitySlot = slots.find((slot) => slot.slotType === "activity") ?? slots[0];
+  const foodSlot = slots.find((slot) => slot.slotType === "food");
+  const extraSlot = slots.find((slot) => slot.slotType === "extra") ?? slots[slots.length - 1];
+
+  const steps: RouteStepPreview[] = [
+    {
+      label: "先去哪里",
+      name: activitySlot.poi?.name ?? "待定地点",
+      timeRange: `${activitySlot.startTime}-${activitySlot.endTime}`,
+    },
+  ];
+
+  if (foodSlot && foodSlot !== activitySlot) {
+    steps.push({
+      label: "吃饭 / 活动",
+      name: foodSlot.poi?.name ?? "待定地点",
+      timeRange: `${foodSlot.startTime}-${foodSlot.endTime}`,
+    });
+  } else if (slots[1] && slots[1] !== activitySlot) {
+    steps.push({
+      label: getPersonaSlotLabel(parseResult, slots[1].slotType),
+      name: slots[1].poi?.name ?? "待定地点",
+      timeRange: `${slots[1].startTime}-${slots[1].endTime}`,
+    });
+  }
+
+  const tailSlot =
+    extraSlot && extraSlot !== foodSlot && extraSlot !== activitySlot
+      ? extraSlot
+      : slots.length > 2
+        ? slots[slots.length - 1]
+        : undefined;
+
+  if (tailSlot && !steps.some((step) => step.name === (tailSlot.poi?.name ?? ""))) {
+    steps.push({
+      label: tailSlot.slotType === "extra" ? "收尾 / 饭后" : getPersonaSlotLabel(parseResult, tailSlot.slotType),
+      name: tailSlot.poi?.name ?? "待定地点",
+      timeRange: `${tailSlot.startTime}-${tailSlot.endTime}`,
+    });
+  }
+
+  return steps.slice(0, 3);
+}
+
+function buildCompactGuidanceLines(guidance: RouteGuidanceSummary) {
+  const lines: string[] = [];
+  if (guidance.steps[0]) lines.push(guidance.steps[0]);
+  const hint = guidance.timeHint?.split(/[。；]/)[0]?.trim();
+  if (hint && lines.length < 2 && !lines.includes(hint)) lines.push(hint);
+  return lines.slice(0, 2);
+}
+
+function CollapseSection({
+  title,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
-    <div className="rounded-xl border-2 border-meituan-yellow/80 bg-meituan-yellow/15 px-3 py-2.5 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-extrabold text-meituan-ink">{guidance.title}</p>
-        <span className="shrink-0 rounded-full bg-meituan-yellow px-2 py-0.5 text-[10px] font-extrabold text-meituan-ink">
-          {guidance.transportLabel}
-        </span>
-      </div>
-      {guidance.fallbackNote ? (
-        <p className="mt-1.5 text-[11px] font-bold leading-5 text-emerald-800">{guidance.fallbackNote}</p>
-      ) : null}
-      <ol className="mt-2 space-y-1.5">
-        {guidance.steps.map((step, index) => (
-          <li key={`${index}-${step}`} className="flex gap-2 text-xs font-semibold leading-5 text-black/78">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-meituan-yellow text-[10px] font-extrabold text-meituan-ink">
-              {index + 1}
-            </span>
-            <span className="min-w-0 pt-0.5">{step}</span>
-          </li>
-        ))}
-      </ol>
-      {guidance.timeHint ? (
-        <p className="mt-2 rounded-md bg-white/70 px-2 py-1.5 text-[11px] font-semibold leading-5 text-black/68">
-          {guidance.timeHint}
-        </p>
-      ) : null}
-      {guidance.preferenceHint ? (
-        <p className="mt-1.5 rounded-md bg-white/70 px-2 py-1.5 text-[11px] font-semibold leading-5 text-black/62">
-          {guidance.preferenceHint}
-        </p>
-      ) : null}
+    <div className="rounded-lg border border-black/8 bg-meituan-gray/40">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        <span className="text-xs font-extrabold text-black/70">{title}</span>
+        <span className="shrink-0 text-[10px] font-bold text-black/45">{open ? "收起" : "展开"}</span>
+      </button>
+      {open ? <div className="space-y-2 border-t border-black/6 px-3 pb-3 pt-2">{children}</div> : null}
     </div>
   );
 }
 
 function DynamicFeasibilityBlock({ effects }: { effects: TravelSettingEffectsSummary }) {
   return (
-    <div className="mb-2.5 rounded-lg border border-black/8 bg-white px-3 py-2.5">
+    <div className="rounded-lg border border-black/8 bg-white px-3 py-2.5">
       <p className="text-xs font-extrabold text-meituan-ink">动态可行性</p>
       <p className="mt-1 text-sm font-bold text-meituan-ink">{effects.windowHeadline}</p>
       <p className="mt-1 text-[11px] font-semibold leading-5 text-black/62">{effects.riskSummaryLine}</p>
@@ -214,6 +264,44 @@ function DynamicFeasibilityBlock({ effects }: { effects: TravelSettingEffectsSum
       {effects.preferenceReason ? (
         <p className="mt-1.5 text-[11px] leading-5 text-black/55">{effects.preferenceReason}</p>
       ) : null}
+    </div>
+  );
+}
+
+function CompactGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
+  const lines = buildCompactGuidanceLines(guidance);
+
+  return (
+    <div className="rounded-lg border border-meituan-yellow/50 bg-meituan-yellow/10 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-extrabold text-meituan-ink">出行指引</p>
+        <span className="shrink-0 rounded-full bg-meituan-yellow/70 px-2 py-0.5 text-[10px] font-bold text-meituan-ink">
+          {guidance.transportLabel}
+        </span>
+      </div>
+      <ul className="mt-1.5 space-y-1">
+        {lines.map((line) => (
+          <li key={line} className="text-[11px] font-semibold leading-5 text-black/68">
+            · {line}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RouteThreeStepsBlock({ steps }: { steps: RouteStepPreview[] }) {
+  return (
+    <div className="space-y-1">
+      {steps.map((step, index) => (
+        <div key={`${step.label}-${step.name}-${index}`} className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-meituan-yellow/80 text-[10px] font-extrabold text-meituan-ink">
+            {index + 1}
+          </span>
+          <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">{step.label}</span>
+          <span className="min-w-0 truncate text-[11px] font-bold text-black/78">{step.name}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -241,150 +329,187 @@ function MainTabContent({
   onViewFallback: () => void;
   onSelectMainPlan: () => void;
 }) {
-  const displaySlots = summary.slots.slice(0, 2);
   const constraintText = travelSettingsSummary ?? "今天 14:00 · 3小时 · 系统综合规划";
-  const fallbackTimeNote = summary.isFallback ? buildFallbackSwitchNoteWithSettings(summary.planTitle, settingEffects) : null;
+  const routeSteps = buildRouteThreeSteps(summary.slots, parseResult);
 
   return (
-    <>
-      {switchFeedback ? (
-        <p className="mb-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
-      ) : null}
-      {fallbackTimeNote ? (
-        <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900">{fallbackTimeNote}</p>
-      ) : null}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pb-2">
+        {switchFeedback ? (
+          <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
+        ) : null}
 
-      {/* 1. 当前方案状态 */}
-      <div className="mb-2.5 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-extrabold text-meituan-ink">{summary.usageLabel}</p>
-            <p className="mt-0.5 text-xs font-bold text-meituan-ink">{summary.planTitle}</p>
-            <p className="mt-1 text-[11px] leading-5 text-black/55">
-              <span className="font-bold text-black/62">规划约束：</span>
-              {constraintText}
+        <div className="rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold text-meituan-ink">{summary.usageLabel}</p>
+              {summary.isFallback && summary.triggerNote ? (
+                <p className="mt-1 text-[11px] font-semibold leading-5 text-amber-900">{summary.triggerNote}</p>
+              ) : null}
+            </div>
+            {summary.isFallback ? (
+              <button
+                type="button"
+                onClick={onSelectMainPlan}
+                className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+              >
+                恢复主方案
+              </button>
+            ) : onOpenTravelSettings ? (
+              <button
+                type="button"
+                onClick={() => onOpenTravelSettings?.()}
+                className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+              >
+                调整
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
+          <div className="rounded-lg bg-meituan-yellow/75 px-1 py-1.5">
+            <b className="block text-sm font-extrabold text-meituan-ink">{summary.overallScore}</b>
+            成行分
+          </div>
+          <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
+            <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalMinutes}</b>
+            总耗时
+          </div>
+          <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
+            <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalBudget}</b>
+            预算
+          </div>
+          <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
+            <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalWaitMinutes}</b>
+            等待
+          </div>
+        </div>
+
+        <p className="truncate rounded-lg bg-white px-3 py-2 text-[11px] font-semibold text-black/62">{constraintText}</p>
+
+        <RouteThreeStepsBlock steps={routeSteps} />
+
+        <CompactGuidanceBlock guidance={guidance} />
+
+        <CollapseSection title="查看规划依据">
+          <DynamicFeasibilityBlock effects={settingEffects} />
+
+          <div>
+            <p className="mb-1 text-[11px] font-extrabold text-black/62">为什么适合你这次</p>
+            <ul className="space-y-0.5">
+              {summary.reasons.map((reason) => (
+                <li key={reason} className="text-[11px] leading-5 text-black/58">
+                  · {reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <p className="text-[10px] leading-4 text-black/42">{guidance.mapDemoNote}</p>
+
+          <div>
+            <p className="mb-1 text-[11px] font-bold text-black/45">完整路线节点</p>
+            <div className="space-y-1">
+              {summary.slots.length ? (
+                summary.slots.map((slot) => (
+                  <div
+                    key={`${slot.slotType}-${slot.startTime}`}
+                    className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2 py-1.5"
+                  >
+                    <span className="w-[68px] shrink-0 text-[10px] font-bold text-black/50">
+                      {slot.startTime}-{slot.endTime}
+                    </span>
+                    <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
+                      {getPersonaSlotLabel(parseResult, slot.slotType)}
+                    </span>
+                    <span className="min-w-0 truncate text-[11px] font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="rounded-lg bg-meituan-gray/70 px-2 py-1.5 text-[11px] leading-5 text-black/55">
+                  {summary.slotFallbackText ?? "暂无路线节点"}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-1 text-[11px] leading-5 text-black/58">
+            {summary.experienceLabel ? (
+              <p>
+                <span className="font-bold text-black/65">体验标签：</span>
+                {summary.experienceLabel}
+              </p>
+            ) : null}
+            {summary.riskSummary ? (
+              <p>
+                <span className="font-bold text-black/65">风险摘要：</span>
+                {summary.riskSummary}
+              </p>
+            ) : null}
+            {typeof summary.safetyScore === "number" ? (
+              <p>
+                <span className="font-bold text-black/65">稳妥度：</span>
+                {summary.safetyScore}
+              </p>
+            ) : null}
+            {summary.comparisonSummaryLine ? (
+              <p>
+                <span className="font-bold text-black/65">对比说明：</span>
+                {summary.comparisonSummaryLine}
+              </p>
+            ) : null}
+            {summary.solvedRisk ? (
+              <p>
+                <span className="font-bold text-black/65">解决的问题：</span>
+                {summary.solvedRisk}
+              </p>
+            ) : null}
+            {summary.tradeoffSummary ? (
+              <p>
+                <span className="font-bold text-black/65">代价：</span>
+                {summary.tradeoffSummary}
+              </p>
+            ) : null}
+            <p>
+              <span className="font-bold text-black/65">策略说明：</span>
+              {summary.strategyNote}
             </p>
           </div>
-          {summary.isFallback ? (
-            <button
-              type="button"
-              onClick={onSelectMainPlan}
-              className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
-            >
-              恢复主方案
-            </button>
-          ) : onOpenTravelSettings ? (
-            <button
-              type="button"
-              onClick={() => onOpenTravelSettings?.()}
-              className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
-            >
-              调整
-            </button>
-          ) : null}
-        </div>
+
+          <div className="rounded-lg border border-meituan-yellow/40 bg-meituan-yellow/10 px-3 py-2">
+            <p className="text-[11px] font-extrabold text-meituan-ink">完整出行指引</p>
+            <ol className="mt-1.5 space-y-1">
+              {guidance.steps.map((step, index) => (
+                <li key={`${index}-${step}`} className="text-[11px] leading-5 text-black/65">
+                  {index + 1}. {step}
+                </li>
+              ))}
+            </ol>
+            {guidance.timeHint ? <p className="mt-1.5 text-[11px] leading-5 text-black/58">{guidance.timeHint}</p> : null}
+            {guidance.preferenceHint ? <p className="mt-1 text-[11px] leading-5 text-black/55">{guidance.preferenceHint}</p> : null}
+          </div>
+        </CollapseSection>
       </div>
 
-      {/* 动态可行性 — 出行设置影响 */}
-      <DynamicFeasibilityBlock effects={settingEffects} />
-
-      {/* 2. 核心指标 */}
-      <div className="mb-2.5 grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
-        <div className="rounded-lg bg-meituan-yellow/75 px-1 py-1.5">
-          <b className="block text-sm font-extrabold text-meituan-ink">{summary.overallScore}</b>
-          成行分
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
-          <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalMinutes}</b>
-          总耗时
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
-          <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalBudget}</b>
-          预算
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-1.5">
-          <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalWaitMinutes}</b>
-          等待
+      <div className="shrink-0 border-t border-black/6 bg-white pt-2">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
+            onClick={() => onConfirmExecute?.()}
+          >
+            确认并执行
+          </button>
+          <button
+            type="button"
+            className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62 hover:bg-black/5"
+            onClick={summary.isFallback ? onSelectMainPlan : onViewFallback}
+          >
+            {summary.isFallback ? "恢复主方案" : "查看备选方案"}
+          </button>
         </div>
       </div>
-
-      {/* 3. 出行指引 — 首屏优先 */}
-      <RouteGuidanceBlock guidance={guidance} />
-
-      {/* 4. 路线节点 */}
-      <div className="mt-2.5">
-        <p className="mb-1 text-[11px] font-bold text-black/45">关键节点</p>
-        <div className="space-y-1">
-          {displaySlots.length ? (
-            displaySlots.map((slot, index) => (
-              <div
-                key={`${slot.slotType}-${slot.startTime}`}
-                className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2 py-1.5"
-              >
-                <span className="w-[68px] shrink-0 text-[10px] font-bold text-black/50">
-                  {slot.startTime}-{slot.endTime}
-                </span>
-                <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                  {getPersonaSlotLabel(parseResult, slot.slotType)}
-                </span>
-                <span className="min-w-0 truncate text-[11px] font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
-              </div>
-            ))
-          ) : (
-            <p className="rounded-lg bg-meituan-gray/70 px-2 py-1.5 text-[11px] leading-5 text-black/55">
-              {summary.slotFallbackText ?? "暂无路线节点"}
-            </p>
-          )}
-          {summary.slots.length > 2 ? (
-            <p className="text-[10px] text-black/40">另有 {summary.slots.length - 2} 个节点，详情页可查看</p>
-          ) : null}
-        </div>
-      </div>
-
-      {/* 5. demo 提示 */}
-      <p className="mt-2 text-[10px] leading-4 text-black/42">{guidance.mapDemoNote}</p>
-
-      {/* 为什么适合你这次 */}
-      <div className="mt-2">
-        <p className="mb-1 text-[11px] font-extrabold text-black/62">为什么适合你这次</p>
-        <ul className="space-y-0.5">
-          {summary.reasons.slice(0, 3).map((reason) => (
-            <li key={reason} className="text-[11px] leading-5 text-black/58">
-              · {reason}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* 6. CTA */}
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
-          onClick={() => onConfirmExecute?.()}
-        >
-          确认并执行
-        </button>
-        <button
-          type="button"
-          className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62 hover:bg-black/5"
-          onClick={summary.isFallback ? onSelectMainPlan : onViewFallback}
-        >
-          {summary.isFallback ? "恢复主方案" : "查看备选方案"}
-        </button>
-      </div>
-    </>
-  );
-}
-
-function DiffChipRow({ chips }: { chips: FallbackPlanDisplay["diffChips"] }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {chips.map((chip) => (
-        <span key={`${chip.label}-${chip.value}`} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-black/55">
-          {chip.label}：{chip.value}
-        </span>
-      ))}
     </div>
   );
 }
@@ -397,7 +522,6 @@ function FallbackCard({
   travelSettings,
   fallbackIndex,
   isSelected,
-  onViewDetail,
   onSelectPlan,
 }: {
   plan: ItineraryPlan;
@@ -407,14 +531,13 @@ function FallbackCard({
   travelSettings?: TravelSettings;
   fallbackIndex: number;
   isSelected: boolean;
-  onViewDetail: () => void;
   onSelectPlan: () => void;
 }) {
-  const foodSlot = plan.slots.find((slot) => slot.slotType === "food");
-  const activitySlot = plan.slots.find((slot) => slot.slotType === "activity");
-  const replaceName = foodSlot?.poi?.name ?? activitySlot?.poi?.name ?? plan.title;
+  const [diffOpen, setDiffOpen] = useState(false);
   const personaFallbackLine = getFallbackPersonaReason(parseResult);
   const settingFallbackLine = getFallbackCardSettingHint(settingEffects, travelSettings, fallbackIndex);
+  const diff = plan.diffFromMain;
+  const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes);
 
   return (
     <div className={`rounded-lg border p-3 ${isSelected ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-meituan-gray/60"}`}>
@@ -427,187 +550,74 @@ function FallbackCard({
       <p className="mt-2 text-xs font-bold text-meituan-ink">
         成行分 {display.overallScore} · 稳妥度 {display.safetyScore}
       </p>
-      <p className="mt-1 text-[11px] leading-5 text-black/55">{display.summaryLine}</p>
-      <p className="mt-1.5 rounded-md bg-yellow-50 px-2 py-1.5 text-[11px] font-semibold leading-5 text-black/68">{personaFallbackLine}</p>
-      <p className="mt-1.5 rounded-md bg-sky-50 px-2 py-1.5 text-[11px] font-semibold leading-5 text-sky-900">
-        <span className="font-bold text-sky-950">为什么此时需要备选？</span>
-        {settingFallbackLine}
+      <p className="mt-1.5 text-[11px] leading-5 text-black/62">
+        <span className="font-bold text-black/70">解决的问题：</span>
+        {display.solvedRisk}
       </p>
-      <DiffChipRow chips={display.diffChips} />
-      <div className="mt-3 space-y-1.5 text-[11px] leading-5 text-black/62">
-        <p>
-          <span className="font-bold text-black/70">适用条件：</span>
-          {display.applicableCondition}
-        </p>
-        <p>
-          <span className="font-bold text-black/70">解决的问题：</span>
-          {display.solvedRisk}
-        </p>
-        <p>
-          <span className="font-bold text-black/70">代价：</span>
-          {display.tradeoffSummary}
-        </p>
-      </div>
-      <p className="mt-2 text-xs leading-5 text-black/65">替换节点：{replaceName}</p>
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={onSelectPlan}
-          disabled={isSelected}
-          className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2 text-xs font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-default disabled:opacity-70"
-        >
-          {isSelected ? "已选择" : "选择此方案"}
-        </button>
-        <button
-          type="button"
-          onClick={onViewDetail}
-          className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black/62 hover:bg-black/5"
-        >
-          详情
-        </button>
-      </div>
-    </div>
-  );
-}
+      <p className="mt-1 text-[11px] leading-5 text-black/62">
+        <span className="font-bold text-black/70">代价：</span>
+        {display.tradeoffSummary}
+      </p>
 
-function FallbackDetailContent({
-  plan,
-  display,
-  parseResult,
-  mainPlanMinutes,
-  isSelected,
-  onBack,
-  onSelectPlan,
-}: {
-  plan: ItineraryPlan;
-  display: FallbackPlanDisplay;
-  parseResult: ParseResult;
-  mainPlanMinutes?: number;
-  isSelected: boolean;
-  onBack: () => void;
-  onSelectPlan: () => void;
-}) {
-  const personaLine = getFallbackPersonaReason(parseResult);
-  const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes);
-  const rationaleNotes = plan.slots.flatMap((slot) => slot.rationaleNotes);
-  const diff = plan.diffFromMain;
-
-  return (
-    <>
       <button
         type="button"
-        onClick={onBack}
-        className="mb-3 flex items-center gap-1 text-sm font-bold text-black/62 transition hover:text-black/85"
+        className="mt-2 flex w-full items-center justify-between rounded-lg bg-white/80 px-2.5 py-1.5 text-left"
+        onClick={() => setDiffOpen((open) => !open)}
+        aria-expanded={diffOpen}
       >
-        <span aria-hidden="true">←</span>
-        返回备选列表
+        <span className="text-[11px] font-bold text-black/60">查看差异</span>
+        <span className="text-[10px] font-bold text-black/45">{diffOpen ? "收起" : "展开"}</span>
       </button>
 
-      <h3 className="text-base font-extrabold text-meituan-ink">{plan.title}</h3>
-      <p className="mt-2 text-xs font-bold text-meituan-ink">
-        成行分 {display.overallScore} · 稳妥度 {display.safetyScore}
-      </p>
-      <p className="mt-1 text-[11px] leading-5 text-black/55">{display.summaryLine}</p>
-      <DiffChipRow chips={display.diffChips} />
-
-      <div className="mt-3 space-y-3">
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">适用条件</p>
-          <p className="mt-1 text-xs leading-5 text-black/65">{display.applicableCondition}</p>
-        </div>
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">解决的问题</p>
-          <p className="mt-1 text-xs leading-5 text-black/65">{display.solvedRisk}</p>
-        </div>
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">代价</p>
-          <p className="mt-1 text-xs leading-5 text-black/65">{display.tradeoffSummary}</p>
-        </div>
-
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">触发原因</p>
-          <p className="mt-1 text-xs leading-5 text-black/65">{display.triggerReason}</p>
-        </div>
-
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">替换节点</p>
-          {plan.slots.length ? (
-            <div className="mt-2 space-y-1.5">
-              {plan.slots.map((slot) => (
-                <div key={`${slot.slotType}-${slot.startTime}`} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2">
-                  <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">
-                    {slot.startTime}-{slot.endTime}
-                  </span>
-                  <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                    {getPersonaSlotLabel(parseResult, slot.slotType)}
-                  </span>
-                  <span className="min-w-0 truncate text-xs font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-1 text-xs leading-5 text-black/65">{FALLBACK_SLOT_TEXT}</p>
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 gap-2 text-xs">
-          <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-            <p className="font-extrabold text-black/70">时间变化</p>
-            <p className="mt-1 text-black/65">
-              总耗时 {formatMetric(plan.totalMinutes, FALLBACK_METRIC_TEXT)} 分钟
-              {typeof mainPlanMinutes === "number" ? `（主方案 ${mainPlanMinutes} 分钟）` : ""}
-            </p>
-            {diff ? <p className="mt-1 text-black/55">通勤变化：{formatDelta(diff.deltaCommuteMinutes, "分钟")}</p> : null}
-          </div>
-          <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-            <p className="font-extrabold text-black/70">等待变化</p>
-            <p className="mt-1 text-black/65">预计等待 {formatMetric(plan.totalWaitMinutes, FALLBACK_METRIC_TEXT)} 分钟</p>
-            {diff ? <p className="mt-1 text-black/55">较主方案：{formatDelta(diff.deltaWaitMinutes, "分钟")}</p> : null}
-          </div>
-          <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-            <p className="font-extrabold text-black/70">预算变化</p>
-            <p className="mt-1 text-black/65">预计预算 {formatMetric(plan.totalBudget, FALLBACK_METRIC_TEXT)} 元</p>
-            {diff ? <p className="mt-1 text-black/55">较主方案：{formatDelta(diff.deltaBudget, "元")}</p> : null}
-          </div>
-        </div>
-
-        {riskNotes.length ? (
-          <div className="rounded-lg bg-rose-50 px-3 py-2.5">
-            <p className="text-xs font-extrabold text-rose-900">风险提示</p>
-            <ul className="mt-1 space-y-1">
-              {riskNotes.map((note) => (
-                <li key={note} className="text-xs text-rose-800">
-                  {note}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">为什么适合当前出行画像</p>
-          <p className="mt-1 text-xs leading-5 text-black/65">{personaLine}</p>
-          {rationaleNotes.length ? (
-            <ul className="mt-2 space-y-1">
-              {rationaleNotes.slice(0, 3).map((note) => (
-                <li key={note} className="rounded-md bg-white px-2 py-1.5 text-xs text-black/62">
-                  {note}
-                </li>
-              ))}
-            </ul>
+      {diffOpen ? (
+        <div className="mt-2 space-y-2 text-[11px] leading-5 text-black/62">
+          <p className="text-black/55">{display.summaryLine}</p>
+          <p className="rounded-md bg-sky-50 px-2 py-1.5 font-semibold text-sky-900">
+            <span className="font-bold text-sky-950">为什么此时需要备选？</span>
+            {settingFallbackLine}
+          </p>
+          {diff ? (
+            <>
+              <p>
+                <span className="font-bold text-black/70">等待变化：</span>
+                {formatDelta(diff.deltaWaitMinutes, "分钟")}
+              </p>
+              <p>
+                <span className="font-bold text-black/70">通勤变化：</span>
+                {formatDelta(diff.deltaCommuteMinutes, "分钟")}
+              </p>
+              <p>
+                <span className="font-bold text-black/70">预算变化：</span>
+                {formatDelta(diff.deltaBudget, "元")}
+              </p>
+            </>
           ) : null}
+          {riskNotes.length ? (
+            <p>
+              <span className="font-bold text-black/70">风险变化：</span>
+              {riskNotes.slice(0, 2).join(" / ")}
+            </p>
+          ) : null}
+          <p>
+            <span className="font-bold text-black/70">为什么适合当前出行画像：</span>
+            {personaFallbackLine}
+          </p>
+          <p>
+            <span className="font-bold text-black/70">适用条件：</span>
+            {display.applicableCondition}
+          </p>
         </div>
-      </div>
+      ) : null}
 
       <button
         type="button"
-        disabled={isSelected}
         onClick={onSelectPlan}
-        className="mt-4 w-full rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-default disabled:opacity-70"
+        disabled={isSelected}
+        className="mt-3 w-full rounded-lg bg-meituan-yellow px-3 py-2 text-xs font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-default disabled:opacity-70"
       >
         {isSelected ? "已选择" : "选择此方案"}
       </button>
-    </>
+    </div>
   );
 }
 
@@ -617,10 +627,7 @@ function FallbackTabContent({
   comparison,
   settingEffects,
   travelSettings,
-  fallbackDetailIndex,
   selectedFallbackIndex,
-  onSelectFallbackDetail,
-  onBackToList,
   onSelectFallbackPlan,
 }: {
   routePlan: RoutePlan;
@@ -628,10 +635,7 @@ function FallbackTabContent({
   comparison: PlanComparisonSummary;
   settingEffects: TravelSettingEffectsSummary;
   travelSettings?: TravelSettings;
-  fallbackDetailIndex: number | null;
   selectedFallbackIndex: number | null;
-  onSelectFallbackDetail: (index: number) => void;
-  onBackToList: () => void;
   onSelectFallbackPlan: (index: number) => void;
 }) {
   const fallbackPlans = routePlan.fallbackPlans ?? [];
@@ -640,27 +644,8 @@ function FallbackTabContent({
     return <p className="py-6 text-center text-sm leading-6 text-black/55">当前主方案可行性较高，暂未生成强备选。</p>;
   }
 
-  const detailPlan = fallbackDetailIndex !== null ? fallbackPlans[fallbackDetailIndex] : undefined;
-  const detailDisplay = fallbackDetailIndex !== null ? getFallbackDisplay(comparison, fallbackDetailIndex) : undefined;
-
-  if (detailPlan && detailDisplay && fallbackDetailIndex !== null) {
-    return (
-      <FallbackDetailContent
-        plan={detailPlan}
-        display={detailDisplay}
-        parseResult={parseResult}
-        mainPlanMinutes={routePlan.mainPlan?.totalMinutes}
-        isSelected={selectedPlanTypeIsFallback(selectedFallbackIndex, fallbackDetailIndex)}
-        onBack={onBackToList}
-        onSelectPlan={() => onSelectFallbackPlan(fallbackDetailIndex)}
-      />
-    );
-  }
-
   return (
     <div className="space-y-2">
-      <p className="rounded-lg bg-meituan-gray/60 px-3 py-2 text-[11px] leading-5 text-black/55">{comparison.strategyNote}</p>
-      <p className="rounded-lg bg-sky-50 px-3 py-2 text-[11px] font-semibold leading-5 text-sky-900">{settingEffects.fallbackReasonHint}</p>
       {fallbackPlans.map((plan, index) => {
         const display = getFallbackDisplay(comparison, index);
         if (!display) return null;
@@ -673,18 +658,13 @@ function FallbackTabContent({
             settingEffects={settingEffects}
             travelSettings={travelSettings}
             fallbackIndex={index}
-            isSelected={selectedPlanTypeIsFallback(selectedFallbackIndex, index)}
-            onViewDetail={() => onSelectFallbackDetail(index)}
+            isSelected={selectedFallbackIndex === index}
             onSelectPlan={() => onSelectFallbackPlan(index)}
           />
         );
       })}
     </div>
   );
-}
-
-function selectedPlanTypeIsFallback(selectedFallbackIndex: number | null, index: number) {
-  return selectedFallbackIndex === index;
 }
 
 function PoiTabContent({
@@ -702,83 +682,90 @@ function PoiTabContent({
 }) {
   const personaConfig = getPersonaConfig(parseResult);
   const poiSettingHint = getPoiTravelSettingHint(settingEffects, travelSettings, poi);
-  const sceneReasons = [personaConfig.poiReason, ...poi.reasons.filter((reason) => reason !== personaConfig.poiReason)].slice(0, 3);
+  const topReason = personaConfig.poiReason || poi.reasons[0] || "与当前场景较匹配";
+  const topRisk = poi.risks[0];
 
   return (
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-extrabold text-meituan-ink">{poi.name}</h3>
-          <p className="mt-0.5 text-xs text-black/55">
-            {poi.category} · 评分 {poi.rating}
-          </p>
+          <p className="mt-1 text-sm font-extrabold text-meituan-ink">成行分 {poi.goabilityScore}</p>
         </div>
         <span className="shrink-0 rounded-full bg-meituan-yellow/25 px-2 py-0.5 text-[10px] font-bold text-meituan-ink">
           {levelLabel[poi.level]}
         </span>
       </div>
 
-      {!mapSelected ? <p className="mt-2 text-[11px] text-black/45">点击地图上的点位可切换查看</p> : null}
+      {!mapSelected ? <p className="mt-1 text-[11px] text-black/45">点击地图上的点位可切换查看</p> : null}
 
-      <div className="mt-3 grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
-        <div className="rounded-lg bg-meituan-yellow/75 px-1 py-2">
-          <b className="block text-base text-meituan-ink">{poi.goabilityScore}</b>
-          成行分
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{poi.sceneFitScore}</b>
-          场景匹配
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{poi.availabilityScore}</b>
-          动态可行
-        </div>
-        <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{poi.routeScore}</b>
-          路线衔接
-        </div>
-      </div>
+      <p className="mt-2 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">{topReason}</p>
 
-      <div className="mt-3">
-        <p className="mb-1 text-xs font-extrabold text-black/70">场景匹配</p>
-        <ul className="space-y-1">
-          {sceneReasons.map((reason) => (
-            <li key={reason} className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
-              {reason}
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="mt-3">
-        <p className="mb-1 text-xs font-extrabold text-black/70">动态可行性</p>
-        <p className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-900">{poiSettingHint}</p>
-        <p className="mt-1 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
-          {personaConfig.availabilityHint}
-        </p>
-        <p className="mt-1 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
-          ETA {poi.routeEtaMinutes} 分钟 · 排队 {poi.queueMinutes} 分钟 · 人均 {poi.pricePerPerson} 元
-          {poi.reservationAvailable ? " · 当前可订" : ""}
-        </p>
-      </div>
-
-      <div className="mt-3">
-        <p className="mb-1 text-xs font-extrabold text-black/70">路线衔接</p>
-        <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">{personaConfig.routeLinkHint}</p>
-      </div>
-
-      {poi.risks.length ? (
-        <div className="mt-3">
-          <p className="mb-1 text-xs font-extrabold text-black/70">风险提示</p>
-          <ul className="space-y-1">
-            {poi.risks.slice(0, 3).map((risk) => (
-              <li key={risk} className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">
-                {risk}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {topRisk ? (
+        <p className="mt-1.5 rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">{topRisk}</p>
       ) : null}
+
+      <div className="mt-3">
+        <CollapseSection title="查看推荐证据">
+          <div className="grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
+            <div className="rounded-lg bg-meituan-yellow/75 px-1 py-2">
+              <b className="block text-base text-meituan-ink">{poi.goabilityScore}</b>
+              成行分
+            </div>
+            <div className="rounded-lg bg-meituan-gray px-1 py-2">
+              <b className="block text-base text-meituan-ink">{poi.sceneFitScore}</b>
+              场景匹配
+            </div>
+            <div className="rounded-lg bg-meituan-gray px-1 py-2">
+              <b className="block text-base text-meituan-ink">{poi.availabilityScore}</b>
+              动态可行
+            </div>
+            <div className="rounded-lg bg-meituan-gray px-1 py-2">
+              <b className="block text-base text-meituan-ink">{poi.routeScore}</b>
+              路线衔接
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-extrabold text-black/70">场景匹配</p>
+            <ul className="space-y-1">
+              {[personaConfig.poiReason, ...poi.reasons.filter((reason) => reason !== personaConfig.poiReason)].slice(0, 3).map((reason) => (
+                <li key={reason} className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
+                  {reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-extrabold text-black/70">动态可行性</p>
+            <p className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-900">{poiSettingHint}</p>
+            <p className="mt-1 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">{personaConfig.availabilityHint}</p>
+            <p className="mt-1 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
+              ETA {poi.routeEtaMinutes} 分钟 · 排队 {poi.queueMinutes} 分钟 · 人均 {poi.pricePerPerson} 元
+              {poi.reservationAvailable ? " · 当前可订" : ""}
+            </p>
+          </div>
+
+          <div>
+            <p className="mb-1 text-xs font-extrabold text-black/70">路线衔接</p>
+            <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">{personaConfig.routeLinkHint}</p>
+          </div>
+
+          {poi.risks.length > 1 ? (
+            <div>
+              <p className="mb-1 text-xs font-extrabold text-black/70">更多风险提示</p>
+              <ul className="space-y-1">
+                {poi.risks.slice(1, 3).map((risk) => (
+                  <li key={risk} className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs text-rose-800">
+                    {risk}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </CollapseSection>
+      </div>
     </>
   );
 }
@@ -800,7 +787,6 @@ export function BottomPlanSheet({
   onOpenTravelSettings,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
-  const [fallbackDetailIndex, setFallbackDetailIndex] = useState<number | null>(null);
   const [switchFeedback, setSwitchFeedback] = useState<string | null>(null);
 
   const settingEffects = useMemo(() => buildTravelSettingEffects(travelSettings), [travelSettings]);
@@ -828,12 +814,6 @@ export function BottomPlanSheet({
   );
 
   useEffect(() => {
-    if (activeTab !== "fallback") {
-      setFallbackDetailIndex(null);
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
     if (!switchFeedback) return;
     const timer = window.setTimeout(() => setSwitchFeedback(null), 3000);
     return () => window.clearTimeout(timer);
@@ -843,6 +823,7 @@ export function BottomPlanSheet({
     onSelectFallbackPlan(index);
     const planTitle = routePlan.fallbackPlans?.[index]?.title ?? "备选方案";
     setSwitchFeedback(buildFallbackSwitchNoteWithSettings(planTitle, settingEffects));
+    onTabChange("main");
   }
 
   return (
@@ -856,10 +837,7 @@ export function BottomPlanSheet({
             <button
               key={tab.id}
               type="button"
-              onClick={() => {
-                if (tab.id !== "fallback") setFallbackDetailIndex(null);
-                onTabChange(tab.id);
-              }}
+              onClick={() => onTabChange(tab.id)}
               className={`flex-1 rounded-t-lg px-2 py-2 text-xs font-bold transition ${
                 active ? "bg-meituan-yellow/20 text-meituan-ink" : "text-black/45 hover:text-black/65"
               }`}
@@ -870,7 +848,7 @@ export function BottomPlanSheet({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
+      <div className={`min-h-0 flex-1 ${activeTab === "main" ? "flex flex-col px-4 pb-2 pt-3" : "overflow-y-auto px-4 pb-4 pt-3"}`}>
         {activeTab === "main" ? (
           <MainTabContent
             summary={currentPlanSummary}
@@ -881,10 +859,7 @@ export function BottomPlanSheet({
             onOpenTravelSettings={onOpenTravelSettings}
             switchFeedback={switchFeedback}
             onConfirmExecute={onConfirmExecute}
-            onViewFallback={() => {
-              setFallbackDetailIndex(null);
-              onTabChange("fallback");
-            }}
+            onViewFallback={() => onTabChange("fallback")}
             onSelectMainPlan={onSelectMainPlan}
           />
         ) : null}
@@ -896,10 +871,7 @@ export function BottomPlanSheet({
             comparison={planComparison}
             settingEffects={settingEffects}
             travelSettings={travelSettings}
-            fallbackDetailIndex={fallbackDetailIndex}
             selectedFallbackIndex={selectedPlanType === "fallback" ? selectedFallbackIndex : null}
-            onSelectFallbackDetail={setFallbackDetailIndex}
-            onBackToList={() => setFallbackDetailIndex(null)}
             onSelectFallbackPlan={handleSelectFallbackPlan}
           />
         ) : null}
