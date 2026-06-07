@@ -17,7 +17,15 @@ import { defaultInputs, parseInput } from "@/lib/parseIntent";
 import { runAgent, runAgentFromParseResult } from "@/lib/runAgent";
 import { applyParseOverrides } from "@/lib/parsers/applyOverrides";
 import { applyRoutePrefs } from "@/lib/parsers/applyRoutePrefs";
-import { DEFAULT_PREFERENCE_SUMMARY, type PreferenceSubmitPayload } from "@/lib/preferenceSummary";
+import {
+  buildChipTimePatch,
+  buildTimeWindowSummary,
+  DEFAULT_PREFERENCE_SUMMARY,
+  DEFAULT_TIME_WINDOW_SUMMARY,
+  type DepartureChip,
+  type DurationChip,
+  type PreferenceSubmitPayload,
+} from "@/lib/preferenceSummary";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
 type AppScreen = "input" | "result" | "details" | "execute";
@@ -53,6 +61,10 @@ export default function Home() {
   const [routePrefOpen, setRoutePrefOpen] = useState(false);
   const [preferencesConfigured, setPreferencesConfigured] = useState(false);
   const [preferenceSummaryText, setPreferenceSummaryText] = useState(DEFAULT_PREFERENCE_SUMMARY);
+  const [timeWindowSummaryText, setTimeWindowSummaryText] = useState(DEFAULT_TIME_WINDOW_SUMMARY);
+  const [departureChip, setDepartureChip] = useState<DepartureChip | null>(null);
+  const [durationChip, setDurationChip] = useState<DurationChip | null>(null);
+  const [customStartTime, setCustomStartTime] = useState("14:00");
   const [savedPreferencePayload, setSavedPreferencePayload] = useState<PreferenceSubmitPayload | null>(null);
   const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [planningStep, setPlanningStep] = useState(0);
@@ -93,6 +105,24 @@ export default function Home() {
     resetPlanSelection();
   }
 
+  function applyChipOverrides(baseResult: AgentResult) {
+    const chipPatch = buildChipTimePatch({ departureChip, durationChip, customStartTime });
+    const patchedParse = applyParseOverrides(baseResult.parseResult, chipPatch);
+    return runAgentFromParseResult(patchedParse);
+  }
+
+  function refreshTimeWindowSummary(parseResult: AgentResult["parseResult"], preferenceSummary = preferenceSummaryText) {
+    setTimeWindowSummaryText(
+      buildTimeWindowSummary({
+        parseResult,
+        departureChip,
+        durationChip,
+        customStartTime,
+        preferenceSummary,
+      }),
+    );
+  }
+
   function applyPreferencePayload(parseResult: ParseResult, payload: PreferenceSubmitPayload) {
     const withTime = applyParseOverrides(parseResult, payload.intentPatch);
     const withPrefs = applyRoutePrefs(withTime, payload.routePrefs);
@@ -112,6 +142,7 @@ export default function Home() {
     if (screen === "result" || screen === "execute" || screen === "details") {
       const nextResult = applyPreferencePayload(result.parseResult, payload);
       setResult(nextResult);
+      refreshTimeWindowSummary(nextResult.parseResult, payload.displaySummary);
       setSelectedPoiId(undefined);
       setActiveStep(STEP_COUNT);
       setActiveSheetTab("main");
@@ -126,6 +157,7 @@ export default function Home() {
     setSavedPreferencePayload(null);
     setPreferencesConfigured(false);
     setPreferenceSummaryText(DEFAULT_PREFERENCE_SUMMARY);
+    setTimeWindowSummaryText(DEFAULT_TIME_WINDOW_SUMMARY);
   }
 
   const routePrefInitialDraft = useMemo(() => parseInput(goal, wechat, seed).draft, [goal, wechat, seed]);
@@ -183,7 +215,10 @@ export default function Home() {
     resetPlanSelection();
 
     const baseResult = runAgent(goal, wechat, seed);
-    const nextResult = savedPreferencePayload ? applyPreferencePayload(baseResult.parseResult, savedPreferencePayload) : baseResult;
+    const withChips = applyChipOverrides(baseResult);
+    const nextResult = savedPreferencePayload ? applyPreferencePayload(withChips.parseResult, savedPreferencePayload) : withChips;
+    refreshTimeWindowSummary(nextResult.parseResult);
+
     if (nextResult.parseResult.missingFields.length) {
       setIsPlanningOpen(false);
       setPendingParse(nextResult.parseResult);
@@ -225,9 +260,15 @@ export default function Home() {
                   wechat={wechat}
                   seed={seed}
                   loading={loading}
+                  departureChip={departureChip}
+                  durationChip={durationChip}
+                  customStartTime={customStartTime}
                   onGoalChange={setGoal}
                   onWechatChange={setWechat}
                   onSeedChange={setSeed}
+                  onDepartureChipChange={setDepartureChip}
+                  onDurationChipChange={setDurationChip}
+                  onCustomStartTimeChange={setCustomStartTime}
                   onGenerate={handleGenerate}
                   onOpenRoutePreferences={openRoutePreferences}
                   hasRoutePreferences={preferencesConfigured}
@@ -262,6 +303,7 @@ export default function Home() {
                     onSelectFallbackPlan={handleSelectFallbackPlan}
                     onConfirmExecute={() => setScreen("execute")}
                     preferenceSummary={preferenceSummaryText}
+                    timeWindowSummary={timeWindowSummaryText}
                     onOpenRoutePreferences={openRoutePreferences}
                   />
                 </div>
@@ -335,6 +377,7 @@ export default function Home() {
                   nextResult = applyPreferencePayload(nextResult.parseResult, savedPreferencePayload);
                 }
                 setResult(nextResult);
+                refreshTimeWindowSummary(nextResult.parseResult);
                 setSelectedPoiId(undefined);
                 setClarifyOpen(false);
                 setPendingParse(null);

@@ -29,6 +29,7 @@ type BottomPlanSheetProps = {
   onSelectFallbackPlan: (index: number) => void;
   onConfirmExecute?: () => void;
   preferenceSummary?: string;
+  timeWindowSummary?: string;
   onOpenRoutePreferences?: () => void;
 };
 
@@ -183,6 +184,7 @@ function MainTabContent({
   guidance,
   parseResult,
   preferenceSummary,
+  timeWindowSummary,
   onOpenRoutePreferences,
   switchFeedback,
   onConfirmExecute,
@@ -193,6 +195,7 @@ function MainTabContent({
   guidance: RouteGuidanceSummary;
   parseResult: ParseResult;
   preferenceSummary?: string;
+  timeWindowSummary?: string;
   onOpenRoutePreferences?: () => void;
   switchFeedback: string | null;
   onConfirmExecute?: () => void;
@@ -200,7 +203,7 @@ function MainTabContent({
   onSelectMainPlan: () => void;
 }) {
   const displaySlots = summary.slots.slice(0, 2);
-  const prefText = preferenceSummary ?? "系统综合推荐 · 按时间、距离、排队风险综合规划";
+  const constraintText = timeWindowSummary ?? preferenceSummary ?? "系统综合推荐 · 按时间、距离、排队风险综合规划";
 
   return (
     <>
@@ -215,8 +218,8 @@ function MainTabContent({
             <p className="text-sm font-extrabold text-meituan-ink">{summary.usageLabel}</p>
             <p className="mt-0.5 text-xs font-bold text-meituan-ink">{summary.planTitle}</p>
             <p className="mt-1 text-[11px] leading-5 text-black/55">
-              <span className="font-bold text-black/62">偏好摘要：</span>
-              {prefText}
+              <span className="font-bold text-black/62">规划约束：</span>
+              {constraintText}
             </p>
           </div>
           {summary.isFallback ? (
@@ -714,6 +717,7 @@ export function BottomPlanSheet({
   onSelectFallbackPlan,
   onConfirmExecute,
   preferenceSummary,
+  timeWindowSummary,
   onOpenRoutePreferences,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
@@ -790,6 +794,7 @@ export function BottomPlanSheet({
             guidance={routeGuidance}
             parseResult={parseResult}
             preferenceSummary={preferenceSummary}
+            timeWindowSummary={timeWindowSummary}
             onOpenRoutePreferences={onOpenRoutePreferences}
             switchFeedback={switchFeedback}
             onConfirmExecute={onConfirmExecute}
