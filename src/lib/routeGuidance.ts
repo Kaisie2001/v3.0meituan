@@ -1,6 +1,7 @@
 import type { Intent, ItineraryPlan, RoutePlan, TransportMode } from "./types";
-import type { TimePickerValue } from "./preferenceSummary";
-import { buildTimeWindowEffects } from "./timeWindowEffects";
+import type { TravelSettings } from "./preferenceSummary";
+import { TRANSPORT_MODE_LABELS } from "./preferenceSummary";
+import { buildTravelSettingEffects } from "./travelSettingEffects";
 
 export const MAP_DEMO_NOTE = "地图路线为 demo 示意，实际导航可接入美团/地图路径服务。";
 
@@ -15,6 +16,7 @@ export type RouteGuidanceSummary = {
   mapDemoNote: string;
   fallbackNote?: string;
   timeHint?: string;
+  preferenceHint?: string;
 };
 
 type GuidanceMode = TransportMode | "auto";
@@ -51,7 +53,15 @@ function resolveActivePlan(
   return routePlan.mainPlan;
 }
 
-function resolveGuidanceMode(intent: Intent): GuidanceMode {
+function resolveGuidanceMode(intent: Intent, travelSettings?: TravelSettings | null): GuidanceMode {
+  if (travelSettings?.transportMode) {
+    const mode = travelSettings.transportMode;
+    if (mode === "walking") return "walking";
+    if (mode === "driving") return "driving";
+    if (mode === "transit") return "transit";
+    if (mode === "auto") return "auto";
+  }
+
   const transport = intent.routePrefs?.transport;
   if (transport === "walking") return "walking";
   if (transport === "driving") return "driving";
@@ -61,7 +71,10 @@ function resolveGuidanceMode(intent: Intent): GuidanceMode {
   return "auto";
 }
 
-function transportLabel(mode: GuidanceMode) {
+function transportLabel(mode: GuidanceMode, travelSettings?: TravelSettings | null) {
+  if (travelSettings?.transportMode) {
+    return TRANSPORT_MODE_LABELS[travelSettings.transportMode] ?? "系统综合推荐";
+  }
   switch (mode) {
     case "walking":
       return "步行优先";
@@ -88,38 +101,51 @@ function destinationHint(plan?: ItineraryPlan) {
   return typeof name === "string" && name.trim() ? name.trim() : "目的地";
 }
 
-function buildTransitSteps(commuteMinutes: number, destination: string, isFallback: boolean) {
+function buildTransitSteps(
+  commuteMinutes: number,
+  destination: string,
+  isFallback: boolean,
+  isEveningRush: boolean,
+) {
   const walkToStop = clampMinutes(commuteMinutes * 0.35, 6, 10);
   const walkToDest = clampMinutes(commuteMinutes * 0.25, 4, 8);
   const prefix = isFallback ? "备选方案：" : "";
-  return [
+  const steps = [
     `${prefix}步行 ${walkToStop} 分钟到最近地铁/公交站`,
     "乘坐 2–3 站到目标片区",
     `步行 ${walkToDest} 分钟到${destination}`,
   ];
+  if (isEveningRush) {
+    return steps;
+  }
+  return steps;
 }
 
-function buildWalkingSteps(commuteMinutes: number, isFallback: boolean) {
-  const low = clampMinutes(commuteMinutes * 0.8, 8, 30);
-  const high = clampMinutes(commuteMinutes * 1.2, low + 4, 35);
+function buildWalkingSteps(commuteMinutes: number, isFallback: boolean, periodKey: string) {
+  const low = clampMinutes(commuteMinutes * 0.8, 12, 18);
+  const high = clampMinutes(commuteMinutes * 1.2, low + 2, 22);
   const prefix = isFallback ? "备选方案全程" : "全程";
-  return [
+  const steps = [
     `${prefix}步行约 ${low}–${high} 分钟`,
-    "优先选择短距离、少换乘路线",
-    "适合附近轻松转场",
+    "优先减少换乘，选择短距离转场",
+    "适合附近轻松衔接各节点",
   ];
+  if (periodKey === "night" || periodKey === "evening_rush") {
+    return steps;
+  }
+  return steps;
 }
 
 function buildDrivingSteps(commuteMinutes: number, budgetPerPerson: number, isFallback: boolean) {
-  const low = clampMinutes(commuteMinutes * 0.9, 10, 40);
-  const high = clampMinutes(commuteMinutes * 1.3, low + 5, 50);
-  const fareLow = clampMinutes(budgetPerPerson * 0.15, 18, 80);
-  const fareHigh = clampMinutes(budgetPerPerson * 0.28, fareLow + 8, 120);
+  const low = clampMinutes(commuteMinutes * 0.9, 15, 22);
+  const high = clampMinutes(commuteMinutes * 1.3, low + 3, 28);
+  const fareLow = clampMinutes(budgetPerPerson * 0.15, 25, 80);
+  const fareHigh = clampMinutes(budgetPerPerson * 0.28, fareLow + 5, 120);
   const prefix = isFallback ? "备选方案预计" : "预计";
   return [
     `${prefix}车程约 ${low}–${high} 分钟`,
     `费用约 ¥${fareLow}–${fareHigh}`,
-    "上下车点建议选择商场 / 路口 / 地铁口附近",
+    "晚高峰可能增加等车或堵车时间",
   ];
 }
 
@@ -132,45 +158,70 @@ function buildAutoSteps(isFallback: boolean) {
   ];
 }
 
+function buildTimeHintForMode(
+  mode: GuidanceMode,
+  effects: ReturnType<typeof buildTravelSettingEffects>,
+  travelSettings?: TravelSettings | null,
+) {
+  const hints: string[] = [effects.routeGuidanceHint];
+  if (mode === "transit" && effects.periodKey === "evening_rush") {
+    hints.push("如为晚高峰：建议预留额外 5–8 分钟。");
+  }
+  if (mode === "walking" && (effects.periodKey === "night" || effects.periodKey === "evening_rush")) {
+    hints.push("如为夜间/高峰：可切换公共交通或打车。");
+  }
+  if (mode === "driving" && effects.periodKey === "evening_rush") {
+    hints.push("晚高峰打车等待与路况不确定性更高。");
+  }
+  if (travelSettings && travelSettings.maxCommute <= 25 && mode === "walking") {
+    hints.push("短通勤窗口下，优先少折返。");
+  }
+  return hints.filter(Boolean).join(" ");
+}
+
 export function buildRouteGuidance(params: {
   routePlan: RoutePlan;
   intent: Intent;
   selectedPlanType: "main" | "fallback";
   selectedFallbackIndex: number | null;
-  timePicker?: TimePickerValue | null;
+  travelSettings?: TravelSettings | null;
 }): RouteGuidanceSummary {
-  const { routePlan, intent, selectedPlanType, selectedFallbackIndex, timePicker } = params;
+  const { routePlan, intent, selectedPlanType, selectedFallbackIndex, travelSettings } = params;
   const activePlan = resolveActivePlan(routePlan, selectedPlanType, selectedFallbackIndex);
   const isFallback = selectedPlanType === "fallback" && selectedFallbackIndex !== null;
-  const mode = resolveGuidanceMode(intent);
+  const mode = resolveGuidanceMode(intent, travelSettings);
   const commuteMinutes = sumCommuteMinutes(activePlan, safeNumber(routePlan.mainPlan?.totalCommuteMinutes, 12));
   const destination = destinationHint(activePlan);
-  const budget = safeNumber(intent.budgetPerPerson, 150);
+  const budget = safeNumber(travelSettings?.budget ?? intent.budgetPerPerson, 150);
+
+  const effects = buildTravelSettingEffects(travelSettings ?? null);
+  const isEveningRush = effects.periodKey === "evening_rush";
 
   let steps: string[];
   switch (mode) {
     case "walking":
-      steps = buildWalkingSteps(commuteMinutes, isFallback);
+      steps = buildWalkingSteps(commuteMinutes, isFallback, effects.periodKey);
       break;
     case "driving":
       steps = buildDrivingSteps(commuteMinutes, budget, isFallback);
       break;
     case "transit":
-      steps = buildTransitSteps(commuteMinutes, destination, isFallback);
+      steps = buildTransitSteps(commuteMinutes, destination, isFallback, isEveningRush);
       break;
     default:
       steps = buildAutoSteps(isFallback);
       break;
   }
 
-  const timeEffects = buildTimeWindowEffects(timePicker);
+  const timeHint = buildTimeHintForMode(mode, effects, travelSettings);
 
   return {
     title: "出行指引",
-    transportLabel: transportLabel(mode),
+    transportLabel: transportLabel(mode, travelSettings),
     steps: sanitizeSteps(steps),
     mapDemoNote: MAP_DEMO_NOTE,
     fallbackNote: isFallback ? FALLBACK_GUIDANCE_NOTE : undefined,
-    timeHint: timeEffects.routeGuidanceHint,
+    timeHint: timeHint || undefined,
+    preferenceHint: effects.preferenceReason || undefined,
   };
 }

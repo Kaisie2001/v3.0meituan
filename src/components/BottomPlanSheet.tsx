@@ -12,14 +12,13 @@ import {
 } from "@/lib/planComparison";
 import { buildRouteGuidance, type RouteGuidanceSummary } from "@/lib/routeGuidance";
 import {
-  buildFallbackSwitchNote,
-  buildTimeWindowEffects,
-  getFallbackCardTimeHint,
-  getPoiTimeDynamicHint,
-  type TimeWindowEffectsSummary,
-} from "@/lib/timeWindowEffects";
+  buildFallbackSwitchNoteWithSettings,
+  buildTravelSettingEffects,
+  getFallbackCardSettingHint,
+  getPoiTravelSettingHint,
+  type TravelSettingEffectsSummary,
+} from "@/lib/travelSettingEffects";
 import type { TravelSettings } from "@/lib/preferenceSummary";
-import { travelSettingsToTimePickerValue } from "@/lib/preferenceSummary";
 import type { ItineraryPlan, ParseResult, RoutePlan, RouteSlot, ScoredPoi } from "@/lib/types";
 
 export type SheetTab = "main" | "fallback" | "poi";
@@ -189,11 +188,16 @@ function RouteGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
           {guidance.timeHint}
         </p>
       ) : null}
+      {guidance.preferenceHint ? (
+        <p className="mt-1.5 rounded-md bg-white/70 px-2 py-1.5 text-[11px] font-semibold leading-5 text-black/62">
+          {guidance.preferenceHint}
+        </p>
+      ) : null}
     </div>
   );
 }
 
-function DynamicFeasibilityBlock({ effects }: { effects: TimeWindowEffectsSummary }) {
+function DynamicFeasibilityBlock({ effects }: { effects: TravelSettingEffectsSummary }) {
   return (
     <div className="mb-2.5 rounded-lg border border-black/8 bg-white px-3 py-2.5">
       <p className="text-xs font-extrabold text-meituan-ink">动态可行性</p>
@@ -207,6 +211,9 @@ function DynamicFeasibilityBlock({ effects }: { effects: TimeWindowEffectsSummar
         ))}
       </div>
       <p className="mt-2 text-[11px] leading-5 text-black/58">{effects.planningAdvice}</p>
+      {effects.preferenceReason ? (
+        <p className="mt-1.5 text-[11px] leading-5 text-black/55">{effects.preferenceReason}</p>
+      ) : null}
     </div>
   );
 }
@@ -214,7 +221,7 @@ function DynamicFeasibilityBlock({ effects }: { effects: TimeWindowEffectsSummar
 function MainTabContent({
   summary,
   guidance,
-  timeEffects,
+  settingEffects,
   parseResult,
   travelSettingsSummary,
   onOpenTravelSettings,
@@ -225,7 +232,7 @@ function MainTabContent({
 }: {
   summary: CurrentPlanSummary;
   guidance: RouteGuidanceSummary;
-  timeEffects: TimeWindowEffectsSummary;
+  settingEffects: TravelSettingEffectsSummary;
   parseResult: ParseResult;
   travelSettingsSummary?: string;
   onOpenTravelSettings?: () => void;
@@ -236,7 +243,7 @@ function MainTabContent({
 }) {
   const displaySlots = summary.slots.slice(0, 2);
   const constraintText = travelSettingsSummary ?? "今天 14:00 · 3小时 · 系统综合规划";
-  const fallbackTimeNote = summary.isFallback ? buildFallbackSwitchNote(summary.planTitle, timeEffects) : null;
+  const fallbackTimeNote = summary.isFallback ? buildFallbackSwitchNoteWithSettings(summary.planTitle, settingEffects) : null;
 
   return (
     <>
@@ -278,8 +285,8 @@ function MainTabContent({
         </div>
       </div>
 
-      {/* 动态可行性 — 时间影响 */}
-      <DynamicFeasibilityBlock effects={timeEffects} />
+      {/* 动态可行性 — 出行设置影响 */}
+      <DynamicFeasibilityBlock effects={settingEffects} />
 
       {/* 2. 核心指标 */}
       <div className="mb-2.5 grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
@@ -386,7 +393,8 @@ function FallbackCard({
   plan,
   display,
   parseResult,
-  timeEffects,
+  settingEffects,
+  travelSettings,
   fallbackIndex,
   isSelected,
   onViewDetail,
@@ -395,7 +403,8 @@ function FallbackCard({
   plan: ItineraryPlan;
   display: FallbackPlanDisplay;
   parseResult: ParseResult;
-  timeEffects: TimeWindowEffectsSummary;
+  settingEffects: TravelSettingEffectsSummary;
+  travelSettings?: TravelSettings;
   fallbackIndex: number;
   isSelected: boolean;
   onViewDetail: () => void;
@@ -405,7 +414,7 @@ function FallbackCard({
   const activitySlot = plan.slots.find((slot) => slot.slotType === "activity");
   const replaceName = foodSlot?.poi?.name ?? activitySlot?.poi?.name ?? plan.title;
   const personaFallbackLine = getFallbackPersonaReason(parseResult);
-  const timeFallbackLine = getFallbackCardTimeHint(timeEffects, fallbackIndex);
+  const settingFallbackLine = getFallbackCardSettingHint(settingEffects, travelSettings, fallbackIndex);
 
   return (
     <div className={`rounded-lg border p-3 ${isSelected ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-meituan-gray/60"}`}>
@@ -420,7 +429,10 @@ function FallbackCard({
       </p>
       <p className="mt-1 text-[11px] leading-5 text-black/55">{display.summaryLine}</p>
       <p className="mt-1.5 rounded-md bg-yellow-50 px-2 py-1.5 text-[11px] font-semibold leading-5 text-black/68">{personaFallbackLine}</p>
-      <p className="mt-1.5 rounded-md bg-sky-50 px-2 py-1.5 text-[11px] font-semibold leading-5 text-sky-900">{timeFallbackLine}</p>
+      <p className="mt-1.5 rounded-md bg-sky-50 px-2 py-1.5 text-[11px] font-semibold leading-5 text-sky-900">
+        <span className="font-bold text-sky-950">为什么此时需要备选？</span>
+        {settingFallbackLine}
+      </p>
       <DiffChipRow chips={display.diffChips} />
       <div className="mt-3 space-y-1.5 text-[11px] leading-5 text-black/62">
         <p>
@@ -603,7 +615,8 @@ function FallbackTabContent({
   routePlan,
   parseResult,
   comparison,
-  timeEffects,
+  settingEffects,
+  travelSettings,
   fallbackDetailIndex,
   selectedFallbackIndex,
   onSelectFallbackDetail,
@@ -613,7 +626,8 @@ function FallbackTabContent({
   routePlan: RoutePlan;
   parseResult: ParseResult;
   comparison: PlanComparisonSummary;
-  timeEffects: TimeWindowEffectsSummary;
+  settingEffects: TravelSettingEffectsSummary;
+  travelSettings?: TravelSettings;
   fallbackDetailIndex: number | null;
   selectedFallbackIndex: number | null;
   onSelectFallbackDetail: (index: number) => void;
@@ -646,7 +660,7 @@ function FallbackTabContent({
   return (
     <div className="space-y-2">
       <p className="rounded-lg bg-meituan-gray/60 px-3 py-2 text-[11px] leading-5 text-black/55">{comparison.strategyNote}</p>
-      <p className="rounded-lg bg-sky-50 px-3 py-2 text-[11px] font-semibold leading-5 text-sky-900">{timeEffects.fallbackReasonHint}</p>
+      <p className="rounded-lg bg-sky-50 px-3 py-2 text-[11px] font-semibold leading-5 text-sky-900">{settingEffects.fallbackReasonHint}</p>
       {fallbackPlans.map((plan, index) => {
         const display = getFallbackDisplay(comparison, index);
         if (!display) return null;
@@ -656,7 +670,8 @@ function FallbackTabContent({
             plan={plan}
             display={display}
             parseResult={parseResult}
-            timeEffects={timeEffects}
+            settingEffects={settingEffects}
+            travelSettings={travelSettings}
             fallbackIndex={index}
             isSelected={selectedPlanTypeIsFallback(selectedFallbackIndex, index)}
             onViewDetail={() => onSelectFallbackDetail(index)}
@@ -675,16 +690,18 @@ function selectedPlanTypeIsFallback(selectedFallbackIndex: number | null, index:
 function PoiTabContent({
   poi,
   parseResult,
-  timeEffects,
+  settingEffects,
+  travelSettings,
   mapSelected,
 }: {
   poi: ScoredPoi;
   parseResult: ParseResult;
-  timeEffects: TimeWindowEffectsSummary;
+  settingEffects: TravelSettingEffectsSummary;
+  travelSettings?: TravelSettings;
   mapSelected: boolean;
 }) {
   const personaConfig = getPersonaConfig(parseResult);
-  const poiTimeHint = getPoiTimeDynamicHint(timeEffects, poi);
+  const poiSettingHint = getPoiTravelSettingHint(settingEffects, travelSettings, poi);
   const sceneReasons = [personaConfig.poiReason, ...poi.reasons.filter((reason) => reason !== personaConfig.poiReason)].slice(0, 3);
 
   return (
@@ -735,7 +752,7 @@ function PoiTabContent({
 
       <div className="mt-3">
         <p className="mb-1 text-xs font-extrabold text-black/70">动态可行性</p>
-        <p className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-900">{poiTimeHint}</p>
+        <p className="rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-semibold text-sky-900">{poiSettingHint}</p>
         <p className="mt-1 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs text-black/65">
           {personaConfig.availabilityHint}
         </p>
@@ -786,12 +803,7 @@ export function BottomPlanSheet({
   const [fallbackDetailIndex, setFallbackDetailIndex] = useState<number | null>(null);
   const [switchFeedback, setSwitchFeedback] = useState<string | null>(null);
 
-  const timePickerValue = useMemo(
-    () => (travelSettings ? travelSettingsToTimePickerValue(travelSettings) : undefined),
-    [travelSettings],
-  );
-
-  const timeEffects = useMemo(() => buildTimeWindowEffects(timePickerValue), [timePickerValue]);
+  const settingEffects = useMemo(() => buildTravelSettingEffects(travelSettings), [travelSettings]);
 
   const planComparison = useMemo(
     () => buildPlanComparison(routePlan, rankedPois, parseResult.intent),
@@ -810,9 +822,9 @@ export function BottomPlanSheet({
         intent: parseResult.intent,
         selectedPlanType,
         selectedFallbackIndex,
-        timePicker: timePickerValue,
+        travelSettings,
       }),
-    [routePlan, parseResult.intent, selectedPlanType, selectedFallbackIndex, timePickerValue],
+    [routePlan, parseResult.intent, selectedPlanType, selectedFallbackIndex, travelSettings],
   );
 
   useEffect(() => {
@@ -829,7 +841,8 @@ export function BottomPlanSheet({
 
   function handleSelectFallbackPlan(index: number) {
     onSelectFallbackPlan(index);
-    setSwitchFeedback("已切换为该备选方案，可直接确认执行。");
+    const planTitle = routePlan.fallbackPlans?.[index]?.title ?? "备选方案";
+    setSwitchFeedback(buildFallbackSwitchNoteWithSettings(planTitle, settingEffects));
   }
 
   return (
@@ -862,7 +875,7 @@ export function BottomPlanSheet({
           <MainTabContent
             summary={currentPlanSummary}
             guidance={routeGuidance}
-            timeEffects={timeEffects}
+            settingEffects={settingEffects}
             parseResult={parseResult}
             travelSettingsSummary={travelSettingsSummary}
             onOpenTravelSettings={onOpenTravelSettings}
@@ -881,7 +894,8 @@ export function BottomPlanSheet({
             routePlan={routePlan}
             parseResult={parseResult}
             comparison={planComparison}
-            timeEffects={timeEffects}
+            settingEffects={settingEffects}
+            travelSettings={travelSettings}
             fallbackDetailIndex={fallbackDetailIndex}
             selectedFallbackIndex={selectedPlanType === "fallback" ? selectedFallbackIndex : null}
             onSelectFallbackDetail={setFallbackDetailIndex}
@@ -892,7 +906,13 @@ export function BottomPlanSheet({
 
         {activeTab === "poi" ? (
           displayPoi ? (
-            <PoiTabContent poi={displayPoi} parseResult={parseResult} timeEffects={timeEffects} mapSelected={Boolean(selectedPoi)} />
+            <PoiTabContent
+              poi={displayPoi}
+              parseResult={parseResult}
+              settingEffects={settingEffects}
+              travelSettings={travelSettings}
+              mapSelected={Boolean(selectedPoi)}
+            />
           ) : (
             <p className="py-6 text-center text-sm text-black/55">暂无推荐点详情</p>
           )
