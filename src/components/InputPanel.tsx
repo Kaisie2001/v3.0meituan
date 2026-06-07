@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { defaultInputs } from "@/lib/parseIntent";
 
 const exampleGoals = [
@@ -30,6 +31,11 @@ export function InputPanel({
   onSeedChange,
   onGenerate,
 }: InputPanelProps) {
+  const [wechatOpen, setWechatOpen] = useState(false);
+  const [seedOpen, setSeedOpen] = useState(false);
+  const hasWechat = wechat.trim().length > 0;
+  const hasSeed = seed.trim().length > 0;
+
   return (
     <section className="rounded-lg border border-black/5 bg-white p-5 shadow-soft">
       <div className="mb-5">
@@ -52,7 +58,7 @@ export function InputPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_auto] lg:items-end">
+      <div className="grid gap-3">
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-black/75">你今天想怎么安排？</span>
           <textarea
@@ -62,32 +68,72 @@ export function InputPanel({
             placeholder="比如：今天下午有3小时空，帮我安排一个轻松活动"
           />
         </label>
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-black/50">可选：朋友/家人要求</span>
-          <textarea
-            className="h-28 w-full resize-none rounded-lg border border-black/8 bg-meituan-gray/70 p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow focus:bg-white"
-            value={wechat}
-            onChange={(event) => onWechatChange(event.target.value)}
-            placeholder={defaultInputs.wechat}
-          />
-        </label>
-        <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-black/50">可选：种草地点/收藏内容</span>
-          <textarea
-            className="h-28 w-full resize-none rounded-lg border border-black/8 bg-meituan-gray/70 p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow focus:bg-white"
-            value={seed}
-            onChange={(event) => onSeedChange(event.target.value)}
-            placeholder={defaultInputs.seed}
-          />
-        </label>
         <button
-          className="h-12 rounded-lg bg-meituan-yellow px-6 text-sm font-bold text-meituan-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-12 w-full rounded-lg bg-meituan-yellow px-6 text-sm font-bold text-meituan-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:justify-self-start"
           type="button"
           disabled={loading}
           onClick={onGenerate}
         >
           {loading ? "规划中..." : "一键 AI 规划"}
         </button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        <div className="rounded-lg border border-black/8 bg-meituan-gray/60">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+            onClick={() => setWechatOpen((open) => !open)}
+            aria-expanded={wechatOpen}
+          >
+            <span>
+              <span className="block text-sm font-extrabold text-black/78">添加朋友/家人要求</span>
+              <span className="mt-1 block text-xs leading-5 text-black/50">例如不吃辣、别太远、预算、人群偏好等</span>
+              {hasWechat ? <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已添加朋友要求</span> : null}
+            </span>
+            <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-black/60 shadow-sm">
+              {wechatOpen ? "收起" : "+ 展开"}
+            </span>
+          </button>
+          {wechatOpen ? (
+            <div className="px-4 pb-4">
+              <textarea
+                className="h-28 w-full resize-none rounded-lg border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
+                value={wechat}
+                onChange={(event) => onWechatChange(event.target.value)}
+                placeholder={defaultInputs.wechat}
+              />
+            </div>
+          ) : null}
+        </div>
+
+        <div className="rounded-lg border border-black/8 bg-meituan-gray/60">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+            onClick={() => setSeedOpen((open) => !open)}
+            aria-expanded={seedOpen}
+          >
+            <span>
+              <span className="block text-sm font-extrabold text-black/78">添加种草地点/收藏内容</span>
+              <span className="mt-1 block text-xs leading-5 text-black/50">例如收藏的店、想去清单、朋友推荐地点等</span>
+              {hasSeed ? <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已添加种草内容</span> : null}
+            </span>
+            <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-black/60 shadow-sm">
+              {seedOpen ? "收起" : "+ 展开"}
+            </span>
+          </button>
+          {seedOpen ? (
+            <div className="px-4 pb-4">
+              <textarea
+                className="h-28 w-full resize-none rounded-lg border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
+                value={seed}
+                onChange={(event) => onSeedChange(event.target.value)}
+                placeholder={defaultInputs.seed}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
     </section>
   );
