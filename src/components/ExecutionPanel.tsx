@@ -8,6 +8,7 @@ type ExecutionPanelProps = {
   actions: ExecutionAction[];
   routePlan?: RoutePlan;
   intent: Intent;
+  selectedPlanLabel?: string;
 };
 
 type ExecutionStatus = "idle" | "running" | "done";
@@ -104,7 +105,7 @@ function delay(ms: number) {
   });
 }
 
-export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelProps) {
+export function ExecutionPanel({ actions, routePlan, intent, selectedPlanLabel = "主方案" }: ExecutionPanelProps) {
   const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>("idle");
   const [runningStep, setRunningStep] = useState(0);
   const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
@@ -157,7 +158,8 @@ export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelPro
     <section className="rounded-2xl border border-black/8 bg-white p-4 shadow-soft">
       {executionStatus === "idle" ? (
         <div>
-          <h2 className="text-lg font-extrabold text-meituan-ink">确认并执行</h2>
+          <p className="rounded-lg bg-meituan-yellow/15 px-3 py-2 text-sm font-extrabold text-meituan-ink">将执行：{selectedPlanLabel}</p>
+          <h2 className="mt-4 text-lg font-extrabold text-meituan-ink">确认并执行</h2>
           <p className="mt-1 text-sm text-black/58">AI 将模拟完成订座、下单、路线生成和计划发送。</p>
 
           <ul className="mt-4 space-y-2">

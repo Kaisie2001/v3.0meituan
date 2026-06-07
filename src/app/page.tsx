@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { BottomPlanSheet, type SheetTab } from "@/components/BottomPlanSheet";
+import { BottomPlanSheet, type SelectedPlanType, type SheetTab } from "@/components/BottomPlanSheet";
 import { PlanningModal } from "@/components/PlanningModal";
 import { ExecutionPanel } from "@/components/ExecutionPanel";
 import { InputPanel } from "@/components/InputPanel";
@@ -54,6 +54,41 @@ export default function Home() {
   const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [planningStep, setPlanningStep] = useState(0);
   const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("main");
+  const [selectedPlanType, setSelectedPlanType] = useState<SelectedPlanType>("main");
+  const [selectedFallbackIndex, setSelectedFallbackIndex] = useState<number | null>(null);
+
+  const executionPlanLabel = useMemo(() => {
+    if (selectedPlanType === "fallback" && selectedFallbackIndex !== null) {
+      return result.routePlan.fallbackPlans?.[selectedFallbackIndex]?.title ?? "备选方案";
+    }
+    return "主方案";
+  }, [result.routePlan.fallbackPlans, selectedPlanType, selectedFallbackIndex]);
+
+  useEffect(() => {
+    if (selectedPlanType !== "fallback") return;
+    const count = result.routePlan.fallbackPlans?.length ?? 0;
+    if (selectedFallbackIndex === null || selectedFallbackIndex < 0 || selectedFallbackIndex >= count) {
+      setSelectedPlanType("main");
+      setSelectedFallbackIndex(null);
+    }
+  }, [result.routePlan.fallbackPlans, selectedPlanType, selectedFallbackIndex]);
+
+  function resetPlanSelection() {
+    setSelectedPlanType("main");
+    setSelectedFallbackIndex(null);
+  }
+
+  function handleSelectFallbackPlan(index: number) {
+    const count = result.routePlan.fallbackPlans?.length ?? 0;
+    if (index < 0 || index >= count) return;
+    setSelectedPlanType("fallback");
+    setSelectedFallbackIndex(index);
+    setActiveSheetTab("main");
+  }
+
+  function handleSelectMainPlan() {
+    resetPlanSelection();
+  }
 
   const mapPois = useMemo(() => result.rankedPois, [result]);
   const selectedPoi = useMemo(() => {
@@ -88,6 +123,7 @@ export default function Home() {
     setResult(nextResult);
     setSelectedPoiId(undefined);
     setActiveStep(STEP_COUNT);
+    resetPlanSelection();
   }
 
   function finishPlanning(nextResult: AgentResult) {
@@ -97,6 +133,7 @@ export default function Home() {
     setIsPlanningOpen(false);
     setLoading(false);
     setActiveSheetTab("main");
+    resetPlanSelection();
     setScreen("result");
   }
 
@@ -104,6 +141,7 @@ export default function Home() {
     setLoading(true);
     setActiveStep(1);
     setSelectedPoiId(undefined);
+    resetPlanSelection();
 
     const nextResult = runAgent(goal, wechat, seed);
     if (nextResult.parseResult.missingFields.length) {
@@ -176,6 +214,10 @@ export default function Home() {
                     selectedPoi={selectedPoi}
                     activeTab={activeSheetTab}
                     onTabChange={setActiveSheetTab}
+                    selectedPlanType={selectedPlanType}
+                    selectedFallbackIndex={selectedFallbackIndex}
+                    onSelectMainPlan={handleSelectMainPlan}
+                    onSelectFallbackPlan={handleSelectFallbackPlan}
                     onConfirmExecute={() => setScreen("execute")}
                   />
                 </div>
@@ -219,7 +261,12 @@ export default function Home() {
             {screen === "execute" ? (
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
                 <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
-                <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
+                <ExecutionPanel
+                  actions={result.executionActions}
+                  routePlan={result.routePlan}
+                  intent={result.parseResult.intent}
+                  selectedPlanLabel={executionPlanLabel}
+                />
               </div>
             ) : null}
 
@@ -242,6 +289,7 @@ export default function Home() {
                 setPendingRoutePrefParse(null);
                 setActiveStep(STEP_COUNT);
                 setActiveSheetTab("main");
+                resetPlanSelection();
                 setScreen("result");
               }}
             />
@@ -259,6 +307,7 @@ export default function Home() {
                 setPendingRoutePrefParse(null);
                 setActiveStep(STEP_COUNT);
                 setActiveSheetTab("main");
+                resetPlanSelection();
                 setScreen("result");
               }}
               onSubmit={(prefs) => {
@@ -271,6 +320,7 @@ export default function Home() {
                 setPendingRoutePrefParse(null);
                 setActiveStep(STEP_COUNT);
                 setActiveSheetTab("main");
+                resetPlanSelection();
                 setScreen("result");
               }}
             />

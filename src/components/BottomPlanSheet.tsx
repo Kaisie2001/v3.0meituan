@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getPersonaConfig, inferPersona } from "@/lib/persona";
-import type { ItineraryPlan, ParseResult, RoutePlan, ScoredPoi } from "@/lib/types";
+import type { ItineraryPlan, ParseResult, RoutePlan, RouteSlot, ScoredPoi } from "@/lib/types";
 
 export type SheetTab = "main" | "fallback" | "poi";
+export type SelectedPlanType = "main" | "fallback";
 
 type BottomPlanSheetProps = {
   routePlan: RoutePlan;
@@ -13,7 +14,26 @@ type BottomPlanSheetProps = {
   selectedPoi?: ScoredPoi;
   activeTab: SheetTab;
   onTabChange: (tab: SheetTab) => void;
+  selectedPlanType: SelectedPlanType;
+  selectedFallbackIndex: number | null;
+  onSelectMainPlan: () => void;
+  onSelectFallbackPlan: (index: number) => void;
   onConfirmExecute?: () => void;
+};
+
+type CurrentPlanSummary = {
+  usageLabel: string;
+  isFallback: boolean;
+  planTitle: string;
+  triggerNote?: string;
+  mapNote?: string;
+  score: number | string;
+  totalMinutes: number | string;
+  totalBudget: number | string;
+  totalWaitMinutes: number | string;
+  slots: RouteSlot[];
+  slotFallbackText?: string;
+  reasons: string[];
 };
 
 const slotTypeLabel = {
@@ -44,59 +64,148 @@ const fallbackPersonaCopy = {
   casual: "这个替代方案更灵活，适合按排队、天气或心情随时替换。",
 };
 
+const FALLBACK_SLOT_TEXT = "该备选方案将替换风险较高节点，降低等待或绕路风险。";
+const FALLBACK_METRIC_TEXT = "已按备选策略优化";
+
 function formatDelta(value: number, unit: string) {
-  if (value === 0) return `与主方案相同`;
+  if (value === 0) return "与主方案相同";
   const sign = value > 0 ? "+" : "";
   return `${sign}${value} ${unit}`;
 }
 
+function formatMetric(value: number | undefined, fallback: number | string): number | string {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return fallback;
+}
+
+function buildCurrentPlanSummary(
+  routePlan: RoutePlan,
+  rankedPois: ScoredPoi[],
+  parseResult: ParseResult,
+  selectedPlanType: SelectedPlanType,
+  selectedFallbackIndex: number | null,
+): CurrentPlanSummary {
+  const personaConfig = getPersonaConfig(parseResult);
+  const topPoi = rankedPois[0];
+  const fallbackPlans = routePlan.fallbackPlans ?? [];
+
+  if (selectedPlanType === "fallback" && selectedFallbackIndex !== null) {
+    const plan = fallbackPlans[selectedFallbackIndex];
+    if (plan) {
+      const slots = plan.slots?.slice(0, 3) ?? [];
+      const rationaleNotes = plan.slots?.flatMap((slot) => slot.rationaleNotes) ?? [];
+      const firstPoiId = slots[0]?.poi?.id;
+      const scorePoi = firstPoiId ? rankedPois.find((poi) => poi.id === firstPoiId) : topPoi;
+
+      return {
+        usageLabel: `当前使用：${plan.title}`,
+        isFallback: true,
+        planTitle: plan.title,
+        triggerNote: plan.trigger
+          ? `因${plan.trigger}，已切换为等待更短的备选。`
+          : "因主方案可能排队过长，已切换为等待更短的备选。",
+        mapNote: `地图仍显示整体候选路线，当前执行方案已切换为${plan.title}。`,
+        score: scorePoi?.goabilityScore ?? topPoi?.goabilityScore ?? "可行",
+        totalMinutes: formatMetric(plan.totalMinutes, FALLBACK_METRIC_TEXT),
+        totalBudget: formatMetric(plan.totalBudget, FALLBACK_METRIC_TEXT),
+        totalWaitMinutes: formatMetric(plan.totalWaitMinutes, FALLBACK_METRIC_TEXT),
+        slots,
+        slotFallbackText: slots.length ? undefined : FALLBACK_SLOT_TEXT,
+        reasons: rationaleNotes.length
+          ? rationaleNotes.slice(0, 3)
+          : [fallbackPersonaCopy[inferPersona(parseResult)]],
+      };
+    }
+  }
+
+  const mainPlan = routePlan.mainPlan;
+  const slots = mainPlan?.slots?.slice(0, 3) ?? [];
+
+  return {
+    usageLabel: "当前使用：主方案",
+    isFallback: false,
+    planTitle: personaConfig.planTitle,
+    triggerNote: undefined,
+    mapNote: undefined,
+    score: topPoi?.goabilityScore ?? 0,
+    totalMinutes: formatMetric(mainPlan?.totalMinutes, routePlan.totalMinutes),
+    totalBudget: formatMetric(mainPlan?.totalBudget, routePlan.totalBudget),
+    totalWaitMinutes: formatMetric(mainPlan?.totalWaitMinutes, routePlan.totalWaitMinutes),
+    slots,
+    slotFallbackText: slots.length ? undefined : "暂无路线节点",
+    reasons: personaConfig.bestPlanReasons.slice(0, 3),
+  };
+}
+
 function MainTabContent({
-  routePlan,
-  rankedPois,
-  parseResult,
+  summary,
+  switchFeedback,
   onConfirmExecute,
   onViewFallback,
+  onSelectMainPlan,
 }: {
-  routePlan: RoutePlan;
-  rankedPois: ScoredPoi[];
-  parseResult: ParseResult;
+  summary: CurrentPlanSummary;
+  switchFeedback: string | null;
   onConfirmExecute?: () => void;
   onViewFallback: () => void;
+  onSelectMainPlan: () => void;
 }) {
-  const topPoi = rankedPois[0];
-  const slots = routePlan.mainPlan?.slots.slice(0, 3) ?? [];
-  const personaConfig = getPersonaConfig(parseResult);
-  const score = topPoi?.goabilityScore ?? 0;
-
   return (
     <>
+      {switchFeedback ? (
+        <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
+      ) : null}
+
+      <div className="mb-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-extrabold text-meituan-ink">{summary.usageLabel}</p>
+            {summary.isFallback && summary.triggerNote ? (
+              <p className="mt-1 text-[11px] leading-5 text-black/60">{summary.triggerNote}</p>
+            ) : null}
+          </div>
+          {summary.isFallback ? (
+            <button
+              type="button"
+              onClick={onSelectMainPlan}
+              className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+            >
+              恢复主方案
+            </button>
+          ) : null}
+        </div>
+        {summary.isFallback && summary.mapNote ? (
+          <p className="mt-2 border-t border-black/6 pt-2 text-[11px] leading-5 text-black/50">{summary.mapNote}</p>
+        ) : null}
+      </div>
+
       <div className="min-w-0">
-        <p className="text-[11px] font-bold text-black/45">AI 推荐最佳方案</p>
-        <h2 className="mt-0.5 truncate text-base font-extrabold text-meituan-ink">{personaConfig.planTitle}</h2>
+        <p className="text-[11px] font-bold text-black/45">{summary.isFallback ? "当前执行方案" : "AI 推荐最佳方案"}</p>
+        <h2 className="mt-0.5 truncate text-base font-extrabold text-meituan-ink">{summary.planTitle}</h2>
       </div>
 
       <div className="mt-3 grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/55">
         <div className="rounded-lg bg-meituan-yellow/75 px-1 py-2">
-          <b className="block text-base text-meituan-ink">{score}</b>
+          <b className="block text-base text-meituan-ink">{summary.score}</b>
           成行分
         </div>
         <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{routePlan.totalMinutes}</b>
+          <b className="block text-base text-meituan-ink">{summary.totalMinutes}</b>
           分钟
         </div>
         <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{routePlan.totalBudget}</b>
+          <b className="block text-base text-meituan-ink">{summary.totalBudget}</b>
           元预算
         </div>
         <div className="rounded-lg bg-meituan-gray px-1 py-2">
-          <b className="block text-base text-meituan-ink">{routePlan.totalWaitMinutes}</b>
+          <b className="block text-base text-meituan-ink">{summary.totalWaitMinutes}</b>
           分等待
         </div>
       </div>
 
       <div className="mt-3 space-y-1.5">
-        {slots.length ? (
-          slots.map((slot) => (
+        {summary.slots.length ? (
+          summary.slots.map((slot) => (
             <div key={`${slot.slotType}-${slot.startTime}`} className="flex items-center gap-2 rounded-lg bg-meituan-gray/80 px-2.5 py-2">
               <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">
                 {slot.startTime}-{slot.endTime}
@@ -108,14 +217,16 @@ function MainTabContent({
             </div>
           ))
         ) : (
-          <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-2 text-xs text-black/55">暂无路线节点</p>
+          <p className="rounded-lg bg-meituan-gray/70 px-2.5 py-2 text-xs leading-5 text-black/65">
+            {summary.slotFallbackText ?? "暂无路线节点"}
+          </p>
         )}
       </div>
 
       <div className="mt-3">
         <p className="mb-1.5 text-xs font-extrabold text-black/70">为什么适合你这次</p>
         <ul className="space-y-1">
-          {personaConfig.bestPlanReasons.slice(0, 3).map((reason) => (
+          {summary.reasons.map((reason) => (
             <li key={reason} className="rounded-lg bg-meituan-gray/70 px-2.5 py-1.5 text-xs leading-5 text-black/65">
               {reason}
             </li>
@@ -143,31 +254,64 @@ function MainTabContent({
   );
 }
 
-function FallbackCard({ plan, onClick }: { plan: ItineraryPlan; onClick: () => void }) {
+function FallbackCard({
+  plan,
+  isSelected,
+  onViewDetail,
+  onSelectPlan,
+}: {
+  plan: ItineraryPlan;
+  isSelected: boolean;
+  onViewDetail: () => void;
+  onSelectPlan: () => void;
+}) {
   const foodSlot = plan.slots.find((slot) => slot.slotType === "food");
+  const activitySlot = plan.slots.find((slot) => slot.slotType === "activity");
+  const replaceName = foodSlot?.poi?.name ?? activitySlot?.poi?.name ?? plan.title;
   const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes).slice(0, 1);
+  const diff = plan.diffFromMain;
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-lg border border-black/8 bg-meituan-gray/60 p-3 text-left transition hover:border-meituan-yellow/50 hover:bg-meituan-gray"
-    >
-      <p className="text-sm font-extrabold text-meituan-ink">{plan.title}</p>
-      {plan.trigger ? <p className="mt-1 text-xs text-black/55">触发：{plan.trigger}</p> : null}
-      <p className="mt-2 text-xs leading-5 text-black/65">
-        替换为 {foodSlot?.poi?.name ?? plan.title}，点击查看详情
-      </p>
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/55">
-        <span className="rounded-full bg-white px-2 py-0.5">耗时 {plan.totalMinutes} 分钟</span>
-        <span className="rounded-full bg-white px-2 py-0.5">等待 {plan.totalWaitMinutes} 分钟</span>
-        <span className="rounded-full bg-white px-2 py-0.5">预算 {plan.totalBudget} 元</span>
+    <div className={`rounded-lg border p-3 ${isSelected ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-meituan-gray/60"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-extrabold text-meituan-ink">{plan.title}</p>
+        {isSelected ? (
+          <span className="shrink-0 rounded-full bg-meituan-yellow px-2 py-0.5 text-[10px] font-bold text-meituan-ink">已选择</span>
+        ) : null}
       </div>
+      {plan.trigger ? <p className="mt-1 text-xs text-black/55">触发：{plan.trigger}</p> : null}
+      <p className="mt-2 text-xs leading-5 text-black/65">替换节点：{replaceName}</p>
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold text-black/55">
+        <span className="rounded-full bg-white px-2 py-0.5">耗时 {formatMetric(plan.totalMinutes, FALLBACK_METRIC_TEXT)} 分钟</span>
+        <span className="rounded-full bg-white px-2 py-0.5">等待 {formatMetric(plan.totalWaitMinutes, FALLBACK_METRIC_TEXT)} 分钟</span>
+        <span className="rounded-full bg-white px-2 py-0.5">预算 {formatMetric(plan.totalBudget, FALLBACK_METRIC_TEXT)} 元</span>
+      </div>
+      {diff ? (
+        <p className="mt-2 text-[11px] text-black/50">
+          较主方案：{formatDelta(diff.deltaWaitMinutes, "分钟等待")} · {formatDelta(diff.deltaBudget, "元预算")}
+        </p>
+      ) : null}
       {riskNotes.length ? (
         <p className="mt-2 rounded-md bg-rose-50 px-2 py-1.5 text-[11px] text-rose-800">风险：{riskNotes[0]}</p>
       ) : null}
-      <p className="mt-2 text-[11px] font-bold text-meituan-ink/70">点击查看详情 →</p>
-    </button>
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={onSelectPlan}
+          disabled={isSelected}
+          className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2 text-xs font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-default disabled:opacity-70"
+        >
+          {isSelected ? "已选择" : "选择此方案"}
+        </button>
+        <button
+          type="button"
+          onClick={onViewDetail}
+          className="rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black/62 hover:bg-black/5"
+        >
+          详情
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -175,12 +319,16 @@ function FallbackDetailContent({
   plan,
   parseResult,
   mainPlanMinutes,
+  isSelected,
   onBack,
+  onSelectPlan,
 }: {
   plan: ItineraryPlan;
   parseResult: ParseResult;
   mainPlanMinutes?: number;
+  isSelected: boolean;
   onBack: () => void;
+  onSelectPlan: () => void;
 }) {
   const personaType = inferPersona(parseResult);
   const personaLine = fallbackPersonaCopy[personaType];
@@ -209,49 +357,42 @@ function FallbackDetailContent({
 
         <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
           <p className="text-xs font-extrabold text-black/70">替换节点</p>
-          <div className="mt-2 space-y-1.5">
-            {plan.slots.map((slot) => (
-              <div key={`${slot.slotType}-${slot.startTime}`} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2">
-                <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">
-                  {slot.startTime}-{slot.endTime}
-                </span>
-                <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                  {slotTypeLabel[slot.slotType]}
-                </span>
-                <span className="min-w-0 truncate text-xs font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
-          <p className="text-xs font-extrabold text-black/70">替换地点</p>
-          <ul className="mt-1 space-y-1 text-xs text-black/65">
-            {plan.slots.map((slot) => (
-              <li key={`place-${slot.slotType}-${slot.startTime}`}>
-                {slotTypeLabel[slot.slotType]}：{slot.poi?.name ?? "待定地点"}
-              </li>
-            ))}
-          </ul>
+          {plan.slots.length ? (
+            <div className="mt-2 space-y-1.5">
+              {plan.slots.map((slot) => (
+                <div key={`${slot.slotType}-${slot.startTime}`} className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2">
+                  <span className="w-[72px] shrink-0 text-[10px] font-bold text-black/50">
+                    {slot.startTime}-{slot.endTime}
+                  </span>
+                  <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
+                    {slotTypeLabel[slot.slotType]}
+                  </span>
+                  <span className="min-w-0 truncate text-xs font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs leading-5 text-black/65">{FALLBACK_SLOT_TEXT}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-2 text-xs">
           <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
             <p className="font-extrabold text-black/70">时间变化</p>
             <p className="mt-1 text-black/65">
-              总耗时 {plan.totalMinutes} 分钟
+              总耗时 {formatMetric(plan.totalMinutes, FALLBACK_METRIC_TEXT)} 分钟
               {typeof mainPlanMinutes === "number" ? `（主方案 ${mainPlanMinutes} 分钟）` : ""}
             </p>
             {diff ? <p className="mt-1 text-black/55">通勤变化：{formatDelta(diff.deltaCommuteMinutes, "分钟")}</p> : null}
           </div>
           <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
             <p className="font-extrabold text-black/70">等待变化</p>
-            <p className="mt-1 text-black/65">预计等待 {plan.totalWaitMinutes} 分钟</p>
+            <p className="mt-1 text-black/65">预计等待 {formatMetric(plan.totalWaitMinutes, FALLBACK_METRIC_TEXT)} 分钟</p>
             {diff ? <p className="mt-1 text-black/55">较主方案：{formatDelta(diff.deltaWaitMinutes, "分钟")}</p> : null}
           </div>
           <div className="rounded-lg bg-meituan-gray/70 px-3 py-2.5">
             <p className="font-extrabold text-black/70">预算变化</p>
-            <p className="mt-1 text-black/65">预计预算 {plan.totalBudget} 元</p>
+            <p className="mt-1 text-black/65">预计预算 {formatMetric(plan.totalBudget, FALLBACK_METRIC_TEXT)} 元</p>
             {diff ? <p className="mt-1 text-black/55">较主方案：{formatDelta(diff.deltaBudget, "元")}</p> : null}
           </div>
         </div>
@@ -284,8 +425,13 @@ function FallbackDetailContent({
         </div>
       </div>
 
-      <button type="button" className="mt-4 w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62">
-        选择此备选
+      <button
+        type="button"
+        disabled={isSelected}
+        onClick={onSelectPlan}
+        className="mt-4 w-full rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-default disabled:opacity-70"
+      >
+        {isSelected ? "已选择" : "选择此方案"}
       </button>
     </>
   );
@@ -294,31 +440,37 @@ function FallbackDetailContent({
 function FallbackTabContent({
   routePlan,
   parseResult,
+  fallbackDetailIndex,
   selectedFallbackIndex,
-  onSelectFallback,
+  onSelectFallbackDetail,
   onBackToList,
+  onSelectFallbackPlan,
 }: {
   routePlan: RoutePlan;
   parseResult: ParseResult;
+  fallbackDetailIndex: number | null;
   selectedFallbackIndex: number | null;
-  onSelectFallback: (index: number) => void;
+  onSelectFallbackDetail: (index: number) => void;
   onBackToList: () => void;
+  onSelectFallbackPlan: (index: number) => void;
 }) {
   const fallbackPlans = routePlan.fallbackPlans ?? [];
 
   if (!fallbackPlans.length) {
-    return <p className="py-6 text-center text-sm text-black/55">暂无备选方案</p>;
+    return <p className="py-6 text-center text-sm leading-6 text-black/55">当前主方案可行性较高，暂未生成强备选。</p>;
   }
 
-  const selectedPlan = selectedFallbackIndex !== null ? fallbackPlans[selectedFallbackIndex] : undefined;
+  const detailPlan = fallbackDetailIndex !== null ? fallbackPlans[fallbackDetailIndex] : undefined;
 
-  if (selectedPlan) {
+  if (detailPlan && fallbackDetailIndex !== null) {
     return (
       <FallbackDetailContent
-        plan={selectedPlan}
+        plan={detailPlan}
         parseResult={parseResult}
         mainPlanMinutes={routePlan.mainPlan?.totalMinutes}
+        isSelected={selectedPlanTypeIsFallback(selectedFallbackIndex, fallbackDetailIndex)}
         onBack={onBackToList}
+        onSelectPlan={() => onSelectFallbackPlan(fallbackDetailIndex)}
       />
     );
   }
@@ -326,10 +478,20 @@ function FallbackTabContent({
   return (
     <div className="space-y-2">
       {fallbackPlans.map((plan, index) => (
-        <FallbackCard key={plan.id} plan={plan} onClick={() => onSelectFallback(index)} />
+        <FallbackCard
+          key={plan.id}
+          plan={plan}
+          isSelected={selectedPlanTypeIsFallback(selectedFallbackIndex, index)}
+          onViewDetail={() => onSelectFallbackDetail(index)}
+          onSelectPlan={() => onSelectFallbackPlan(index)}
+        />
       ))}
     </div>
   );
+}
+
+function selectedPlanTypeIsFallback(selectedFallbackIndex: number | null, index: number) {
+  return selectedFallbackIndex === index;
 }
 
 function PoiTabContent({ poi, parseResult, mapSelected }: { poi: ScoredPoi; parseResult: ParseResult; mapSelected: boolean }) {
@@ -413,16 +575,37 @@ export function BottomPlanSheet({
   selectedPoi,
   activeTab,
   onTabChange,
+  selectedPlanType,
+  selectedFallbackIndex,
+  onSelectMainPlan,
+  onSelectFallbackPlan,
   onConfirmExecute,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
-  const [selectedFallbackIndex, setSelectedFallbackIndex] = useState<number | null>(null);
+  const [fallbackDetailIndex, setFallbackDetailIndex] = useState<number | null>(null);
+  const [switchFeedback, setSwitchFeedback] = useState<string | null>(null);
+
+  const currentPlanSummary = useMemo(
+    () => buildCurrentPlanSummary(routePlan, rankedPois, parseResult, selectedPlanType, selectedFallbackIndex),
+    [routePlan, rankedPois, parseResult, selectedPlanType, selectedFallbackIndex],
+  );
 
   useEffect(() => {
     if (activeTab !== "fallback") {
-      setSelectedFallbackIndex(null);
+      setFallbackDetailIndex(null);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!switchFeedback) return;
+    const timer = window.setTimeout(() => setSwitchFeedback(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [switchFeedback]);
+
+  function handleSelectFallbackPlan(index: number) {
+    onSelectFallbackPlan(index);
+    setSwitchFeedback("已切换为该备选方案，可直接确认执行。");
+  }
 
   return (
     <div className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden">
@@ -436,7 +619,7 @@ export function BottomPlanSheet({
               key={tab.id}
               type="button"
               onClick={() => {
-                if (tab.id !== "fallback") setSelectedFallbackIndex(null);
+                if (tab.id !== "fallback") setFallbackDetailIndex(null);
                 onTabChange(tab.id);
               }}
               className={`flex-1 rounded-t-lg px-2 py-2 text-xs font-bold transition ${
@@ -452,14 +635,14 @@ export function BottomPlanSheet({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
         {activeTab === "main" ? (
           <MainTabContent
-            routePlan={routePlan}
-            rankedPois={rankedPois}
-            parseResult={parseResult}
+            summary={currentPlanSummary}
+            switchFeedback={switchFeedback}
             onConfirmExecute={onConfirmExecute}
             onViewFallback={() => {
-              setSelectedFallbackIndex(null);
+              setFallbackDetailIndex(null);
               onTabChange("fallback");
             }}
+            onSelectMainPlan={onSelectMainPlan}
           />
         ) : null}
 
@@ -467,9 +650,11 @@ export function BottomPlanSheet({
           <FallbackTabContent
             routePlan={routePlan}
             parseResult={parseResult}
-            selectedFallbackIndex={selectedFallbackIndex}
-            onSelectFallback={setSelectedFallbackIndex}
-            onBackToList={() => setSelectedFallbackIndex(null)}
+            fallbackDetailIndex={fallbackDetailIndex}
+            selectedFallbackIndex={selectedPlanType === "fallback" ? selectedFallbackIndex : null}
+            onSelectFallbackDetail={setFallbackDetailIndex}
+            onBackToList={() => setFallbackDetailIndex(null)}
+            onSelectFallbackPlan={handleSelectFallbackPlan}
           />
         ) : null}
 
