@@ -18,7 +18,7 @@ export function PlanningModal({ open, step }: PlanningModalProps) {
   const safeStep = Math.min(Math.max(step, 0), planningSteps.length - 1);
 
   return (
-    <div className="absolute inset-0 z-40 flex items-end justify-center bg-black/25 px-4 pb-10 pt-6">
+    <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/25 px-4 pb-10 pt-6">
       <div
         role="dialog"
         aria-modal="true"

@@ -74,8 +74,8 @@ export function RoutePreferenceModal({ open, onClose, onSubmit }: RoutePreferenc
   }
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/35 px-4 py-6">
-      <div className="w-full max-w-2xl rounded-2xl border border-black/10 bg-white p-5 shadow-xl">
+    <div className="absolute inset-0 z-50 grid place-items-center overflow-y-auto bg-black/35 px-3 py-4">
+      <div className="w-full max-w-[350px] rounded-2xl border border-black/10 bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-extrabold text-meituan-ink">路线偏好问答 Agent</h2>

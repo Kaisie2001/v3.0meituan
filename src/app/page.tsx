@@ -138,143 +138,145 @@ export default function Home() {
         <div className="flex shrink-0 items-center justify-center bg-white/85 px-4 py-3">
           <div className="h-1.5 w-24 rounded-full bg-black/12" />
         </div>
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <ClarifyModal
-            open={clarifyOpen}
-            missingFields={pendingParse?.missingFields ?? []}
-            draft={pendingParse?.draft ?? { rawGoal: goal, wechatConstraint: wechat, seedContent: seed }}
-            onClose={() => {
-              setClarifyOpen(false);
-              setPendingParse(null);
-            }}
-            onSubmit={(patch) => {
-              if (!pendingParse) return;
-              const patchedParse = applyParseOverrides(pendingParse, patch);
-              const nextResult = runAgentFromParseResult(patchedParse);
-              setResult(nextResult);
-              setSelectedPoiId(undefined);
-              setClarifyOpen(false);
-              setPendingParse(null);
-              setPendingRoutePrefParse(null);
-              setActiveStep(STEP_COUNT);
-              setActiveSheetTab("main");
-              setScreen("result");
-            }}
-          />
-          <RoutePreferenceModal
-            open={routePrefOpen}
-            onClose={() => {
-              if (!pendingRoutePrefParse) {
-                setRoutePrefOpen(false);
-                return;
-              }
-              const nextResult = runAgentFromParseResult(pendingRoutePrefParse);
-              setResult(nextResult);
-              setSelectedPoiId(undefined);
-              setRoutePrefOpen(false);
-              setPendingRoutePrefParse(null);
-              setActiveStep(STEP_COUNT);
-              setActiveSheetTab("main");
-              setScreen("result");
-            }}
-            onSubmit={(prefs) => {
-              if (!pendingRoutePrefParse) return;
-              const patchedParse = applyRoutePrefs(pendingRoutePrefParse, prefs);
-              const nextResult = runAgentFromParseResult(patchedParse);
-              setResult(nextResult);
-              setSelectedPoiId(undefined);
-              setRoutePrefOpen(false);
-              setPendingRoutePrefParse(null);
-              setActiveStep(STEP_COUNT);
-              setActiveSheetTab("main");
-              setScreen("result");
-            }}
-          />
+        <div className="relative min-h-0 flex-1 overflow-hidden">
+          <div className="relative h-full overflow-hidden">
+            {screen === "input" ? (
+              <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+                <InputPanel
+                  goal={goal}
+                  wechat={wechat}
+                  seed={seed}
+                  loading={loading}
+                  onGoalChange={setGoal}
+                  onWechatChange={setWechat}
+                  onSeedChange={setSeed}
+                  onGenerate={handleGenerate}
+                />
+              </div>
+            ) : null}
 
-          {screen === "input" ? (
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-              <InputPanel
-                goal={goal}
-                wechat={wechat}
-                seed={seed}
-                loading={loading}
-                onGoalChange={setGoal}
-                onWechatChange={setWechat}
-                onSeedChange={setSeed}
-                onGenerate={handleGenerate}
-              />
-            </div>
-          ) : null}
+            {screen === "result" ? (
+              <div className="relative h-full overflow-hidden bg-white">
+                <div className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
+                  <LeafletPlannerMap
+                    variant="hero"
+                    className="h-full w-full"
+                    pois={mapPois}
+                    selectedPoiId={selectedPoiId}
+                    onSelectPoi={handleSelectPoi}
+                    routePoiIds={routePoiIds}
+                  />
+                </div>
 
-          {screen === "result" ? (
-            <div className="relative h-full min-h-0 flex-1 overflow-hidden bg-white">
-              <div className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
-                <LeafletPlannerMap
-                  variant="hero"
-                  className="h-full w-full"
-                  pois={mapPois}
+                <div className="absolute inset-x-0 bottom-0 z-[9999] flex max-h-[45%] min-h-[280px] flex-col overflow-hidden rounded-t-[28px] border border-yellow-200 bg-white shadow-2xl">
+                  <BottomPlanSheet
+                    routePlan={result.routePlan}
+                    rankedPois={result.rankedPois}
+                    parseResult={result.parseResult}
+                    selectedPoi={selectedPoi}
+                    activeTab={activeSheetTab}
+                    onTabChange={setActiveSheetTab}
+                    onConfirmExecute={() => setScreen("execute")}
+                  />
+                </div>
+
+                <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/95 px-3 py-2.5 backdrop-blur-sm">
+                  <button
+                    type="button"
+                    onClick={() => setScreen("input")}
+                    className="rounded-lg px-1 py-1 text-sm font-bold text-black/62 transition hover:text-black/85"
+                  >
+                    ← 返回
+                  </button>
+                  <h1 className="min-w-0 flex-1 truncate text-sm font-extrabold text-meituan-ink">AI 已为你规划好</h1>
+                </header>
+                <div className="relative z-30 shrink-0 bg-white/95 backdrop-blur-sm">
+                  <TripPersonaCard parseResult={result.parseResult} variant="compact" />
+                </div>
+              </div>
+            ) : null}
+
+            {screen === "details" ? (
+              <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+                <ScreenBackButton label="返回主方案" onClick={() => setScreen("result")} />
+                <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
+                <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
+                {selectedPoi ? (
+                  <PoiDetailPanel poi={selectedPoi} onClose={() => setSelectedPoiId(undefined)} onDislike={handleDislikePoi} />
+                ) : null}
+                <RecommendationPanel
+                  pois={result.rankedPois}
+                  parseResult={result.parseResult}
                   selectedPoiId={selectedPoiId}
                   onSelectPoi={handleSelectPoi}
-                  routePoiIds={routePoiIds}
                 />
+                <div className="opacity-80">
+                  <IntentSummary parseResult={result.parseResult} />
+                </div>
               </div>
+            ) : null}
 
-              <div className="absolute inset-x-0 bottom-0 z-[9999] flex max-h-[45%] min-h-[280px] flex-col overflow-hidden rounded-t-[28px] border border-yellow-200 bg-white shadow-2xl">
-                <BottomPlanSheet
-                  routePlan={result.routePlan}
-                  rankedPois={result.rankedPois}
-                  parseResult={result.parseResult}
-                  selectedPoi={selectedPoi}
-                  activeTab={activeSheetTab}
-                  onTabChange={setActiveSheetTab}
-                  onConfirmExecute={() => setScreen("execute")}
-                />
+            {screen === "execute" ? (
+              <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+                <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
+                <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
               </div>
+            ) : null}
 
-              <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/95 px-3 py-2.5 backdrop-blur-sm">
-                <button
-                  type="button"
-                  onClick={() => setScreen("input")}
-                  className="rounded-lg px-1 py-1 text-sm font-bold text-black/62 transition hover:text-black/85"
-                >
-                  ← 返回
-                </button>
-                <h1 className="min-w-0 flex-1 truncate text-sm font-extrabold text-meituan-ink">AI 已为你规划好</h1>
-              </header>
-              <div className="relative z-30 shrink-0 bg-white/95 backdrop-blur-sm">
-                <TripPersonaCard parseResult={result.parseResult} variant="compact" />
-              </div>
-            </div>
-          ) : null}
-
-          {screen === "details" ? (
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-              <ScreenBackButton label="返回主方案" onClick={() => setScreen("result")} />
-              <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
-              <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
-              {selectedPoi ? (
-                <PoiDetailPanel poi={selectedPoi} onClose={() => setSelectedPoiId(undefined)} onDislike={handleDislikePoi} />
-              ) : null}
-              <RecommendationPanel
-                pois={result.rankedPois}
-                parseResult={result.parseResult}
-                selectedPoiId={selectedPoiId}
-                onSelectPoi={handleSelectPoi}
-              />
-              <div className="opacity-80">
-                <IntentSummary parseResult={result.parseResult} />
-              </div>
-            </div>
-          ) : null}
-
-          {screen === "execute" ? (
-            <div className="flex-1 space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-              <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
-              <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
-            </div>
-          ) : null}
+            <ClarifyModal
+              open={clarifyOpen}
+              missingFields={pendingParse?.missingFields ?? []}
+              draft={pendingParse?.draft ?? { rawGoal: goal, wechatConstraint: wechat, seedContent: seed }}
+              onClose={() => {
+                setClarifyOpen(false);
+                setPendingParse(null);
+              }}
+              onSubmit={(patch) => {
+                if (!pendingParse) return;
+                const patchedParse = applyParseOverrides(pendingParse, patch);
+                const nextResult = runAgentFromParseResult(patchedParse);
+                setResult(nextResult);
+                setSelectedPoiId(undefined);
+                setClarifyOpen(false);
+                setPendingParse(null);
+                setPendingRoutePrefParse(null);
+                setActiveStep(STEP_COUNT);
+                setActiveSheetTab("main");
+                setScreen("result");
+              }}
+            />
+            <RoutePreferenceModal
+              open={routePrefOpen}
+              onClose={() => {
+                if (!pendingRoutePrefParse) {
+                  setRoutePrefOpen(false);
+                  return;
+                }
+                const nextResult = runAgentFromParseResult(pendingRoutePrefParse);
+                setResult(nextResult);
+                setSelectedPoiId(undefined);
+                setRoutePrefOpen(false);
+                setPendingRoutePrefParse(null);
+                setActiveStep(STEP_COUNT);
+                setActiveSheetTab("main");
+                setScreen("result");
+              }}
+              onSubmit={(prefs) => {
+                if (!pendingRoutePrefParse) return;
+                const patchedParse = applyRoutePrefs(pendingRoutePrefParse, prefs);
+                const nextResult = runAgentFromParseResult(patchedParse);
+                setResult(nextResult);
+                setSelectedPoiId(undefined);
+                setRoutePrefOpen(false);
+                setPendingRoutePrefParse(null);
+                setActiveStep(STEP_COUNT);
+                setActiveSheetTab("main");
+                setScreen("result");
+              }}
+            />
+            <PlanningModal open={isPlanningOpen} step={planningStep} />
+          </div>
         </div>
-        <PlanningModal open={isPlanningOpen} step={planningStep} />
       </main>
     </div>
   );
