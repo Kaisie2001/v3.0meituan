@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import { BottomPlanSheet } from "@/components/BottomPlanSheet";
+import { BottomPlanSheet, type SheetTab } from "@/components/BottomPlanSheet";
 import { PlanningModal } from "@/components/PlanningModal";
 import { ExecutionPanel } from "@/components/ExecutionPanel";
 import { InputPanel } from "@/components/InputPanel";
@@ -53,6 +53,7 @@ export default function Home() {
   const [pendingRoutePrefParse, setPendingRoutePrefParse] = useState<ParseResult | null>(null);
   const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [planningStep, setPlanningStep] = useState(0);
+  const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("main");
 
   const mapPois = useMemo(() => result.rankedPois, [result]);
   const selectedPoi = useMemo(() => {
@@ -68,6 +69,9 @@ export default function Home() {
 
   function handleSelectPoi(poi: ScoredPoi) {
     setSelectedPoiId(poi.id);
+    if (screen === "result") {
+      setActiveSheetTab("poi");
+    }
   }
 
   function handleDislikePoi(poi: ScoredPoi) {
@@ -92,6 +96,7 @@ export default function Home() {
     setActiveStep(STEP_COUNT);
     setIsPlanningOpen(false);
     setLoading(false);
+    setActiveSheetTab("main");
     setScreen("result");
   }
 
@@ -152,6 +157,7 @@ export default function Home() {
               setPendingParse(null);
               setPendingRoutePrefParse(null);
               setActiveStep(STEP_COUNT);
+              setActiveSheetTab("main");
               setScreen("result");
             }}
           />
@@ -168,6 +174,7 @@ export default function Home() {
               setRoutePrefOpen(false);
               setPendingRoutePrefParse(null);
               setActiveStep(STEP_COUNT);
+              setActiveSheetTab("main");
               setScreen("result");
             }}
             onSubmit={(prefs) => {
@@ -179,6 +186,7 @@ export default function Home() {
               setRoutePrefOpen(false);
               setPendingRoutePrefParse(null);
               setActiveStep(STEP_COUNT);
+              setActiveSheetTab("main");
               setScreen("result");
             }}
           />
@@ -199,8 +207,31 @@ export default function Home() {
           ) : null}
 
           {screen === "result" ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <header className="flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/95 px-3 py-2.5">
+            <div className="relative h-full min-h-0 flex-1 overflow-hidden bg-white">
+              <div className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
+                <LeafletPlannerMap
+                  variant="hero"
+                  className="h-full w-full"
+                  pois={mapPois}
+                  selectedPoiId={selectedPoiId}
+                  onSelectPoi={handleSelectPoi}
+                  routePoiIds={routePoiIds}
+                />
+              </div>
+
+              <div className="absolute inset-x-0 bottom-0 z-[9999] flex max-h-[45%] min-h-[280px] flex-col overflow-hidden rounded-t-[28px] border border-yellow-200 bg-white shadow-2xl">
+                <BottomPlanSheet
+                  routePlan={result.routePlan}
+                  rankedPois={result.rankedPois}
+                  parseResult={result.parseResult}
+                  selectedPoi={selectedPoi}
+                  activeTab={activeSheetTab}
+                  onTabChange={setActiveSheetTab}
+                  onConfirmExecute={() => setScreen("execute")}
+                />
+              </div>
+
+              <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/95 px-3 py-2.5 backdrop-blur-sm">
                 <button
                   type="button"
                   onClick={() => setScreen("input")}
@@ -210,25 +241,8 @@ export default function Home() {
                 </button>
                 <h1 className="min-w-0 flex-1 truncate text-sm font-extrabold text-meituan-ink">AI 已为你规划好</h1>
               </header>
-              <TripPersonaCard parseResult={result.parseResult} variant="compact" />
-              <div className="relative min-h-0 flex-1">
-                <LeafletPlannerMap
-                  variant="hero"
-                  className="h-full min-h-[58%]"
-                  pois={mapPois}
-                  selectedPoiId={selectedPoiId}
-                  onSelectPoi={handleSelectPoi}
-                  routePoiIds={routePoiIds}
-                />
-                <div className="absolute inset-x-0 bottom-0 z-10 max-h-[42%]">
-                  <BottomPlanSheet
-                    routePlan={result.routePlan}
-                    rankedPois={result.rankedPois}
-                    parseResult={result.parseResult}
-                    onViewDetails={() => setScreen("details")}
-                    onConfirmExecute={() => setScreen("execute")}
-                  />
-                </div>
+              <div className="relative z-30 shrink-0 bg-white/95 backdrop-blur-sm">
+                <TripPersonaCard parseResult={result.parseResult} variant="compact" />
               </div>
             </div>
           ) : null}

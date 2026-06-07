@@ -161,21 +161,22 @@ export function LeafletPlannerMap({ pois, selectedPoiId, onSelectPoi, routePoiId
 
   if (isHero) {
     return (
-      <div className={`relative flex h-full min-h-0 w-full flex-col ${className}`}>
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-slate-100">
-          <div ref={hostRef} className="absolute inset-0" />
-          <div className="pointer-events-none absolute left-2 top-2 z-[1000] max-w-[calc(100%-1rem)] rounded-lg bg-white/92 px-2 py-1.5 shadow-sm backdrop-blur-sm">
-            {legend}
-          </div>
-          {tileFailed ? (
-            <div className="absolute inset-0 z-[1001] grid place-items-center bg-slate-50 text-center">
-              <div className="max-w-md px-6">
-                <p className="text-sm font-bold text-black/75">底图加载失败</p>
-                <p className="mt-2 text-sm text-black/60">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
-              </div>
-            </div>
-          ) : null}
+      <div className={`relative z-0 h-full w-full overflow-hidden bg-slate-100 ${className}`}>
+        <div
+          ref={hostRef}
+          className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[2]"
+        />
+        <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-lg bg-white/92 px-2 py-1.5 shadow-sm backdrop-blur-sm">
+          {legend}
         </div>
+        {tileFailed ? (
+          <div className="absolute inset-0 z-[4] grid place-items-center bg-slate-50 text-center">
+            <div className="max-w-md px-6">
+              <p className="text-sm font-bold text-black/75">底图加载失败</p>
+              <p className="mt-2 text-sm text-black/60">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
+            </div>
+          </div>
+        ) : null}
       </div>
     );
   }
