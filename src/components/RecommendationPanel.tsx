@@ -1,13 +1,14 @@
-import type { ScoredPoi } from "@/lib/types";
+import type { ParseResult, ScoredPoi } from "@/lib/types";
 import { PoiCard } from "./PoiCard";
 
 type RecommendationPanelProps = {
   pois: ScoredPoi[];
+  parseResult: ParseResult;
   selectedPoiId?: string;
   onSelectPoi: (poi: ScoredPoi) => void;
 };
 
-export function RecommendationPanel({ pois, selectedPoiId, onSelectPoi }: RecommendationPanelProps) {
+export function RecommendationPanel({ pois, parseResult, selectedPoiId, onSelectPoi }: RecommendationPanelProps) {
   const topPois = pois.slice(0, 3);
 
   return (
@@ -20,7 +21,7 @@ export function RecommendationPanel({ pois, selectedPoiId, onSelectPoi }: Recomm
       </div>
       <div className="space-y-3">
         {topPois.map((poi) => (
-          <PoiCard key={poi.id} poi={poi} selected={poi.id === selectedPoiId} onSelect={onSelectPoi} />
+          <PoiCard key={poi.id} poi={poi} parseResult={parseResult} selected={poi.id === selectedPoiId} onSelect={onSelectPoi} />
         ))}
       </div>
     </section>

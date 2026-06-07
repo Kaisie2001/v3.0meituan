@@ -149,13 +149,13 @@ export default function Home() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
         <LeafletPlannerMap pois={mapPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} routePoiIds={routePoiIds} />
-        <RouteTimeline routePlan={result.routePlan} />
+        <RouteTimeline routePlan={result.routePlan} parseResult={result.parseResult} />
       </div>
 
       {selectedPoi ? <PoiDetailPanel poi={selectedPoi} onClose={() => setSelectedPoiId(undefined)} onDislike={handleDislikePoi} /> : null}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.65fr)_minmax(0,1.35fr)]">
-        <RecommendationPanel pois={result.rankedPois} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} />
+        <RecommendationPanel pois={result.rankedPois} parseResult={result.parseResult} selectedPoiId={selectedPoiId} onSelectPoi={handleSelectPoi} />
         <div id="execution-panel" className="scroll-mt-5">
           <ExecutionPanel actions={result.executionActions} routePlan={result.routePlan} intent={result.parseResult.intent} />
         </div>

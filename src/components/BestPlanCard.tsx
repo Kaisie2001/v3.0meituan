@@ -1,5 +1,6 @@
 "use client";
 
+import { getPersonaConfig } from "@/lib/persona";
 import type { ParseResult, RoutePlan, ScoredPoi } from "@/lib/types";
 
 type BestPlanCardProps = {
@@ -13,17 +14,6 @@ const slotTypeLabel = {
   food: "用餐",
   extra: "饭后活动",
 };
-
-function inferPlanTitle(parseResult: ParseResult) {
-  const intent = parseResult.intent;
-  const text = `${intent.rawGoal} ${intent.wechatConstraint} ${intent.seedContent}`;
-  if (/孩子|亲子|家人|老婆|老公|带娃|家庭/.test(text) || intent.needTags.includes("亲子")) return "家庭亲子少转场方案";
-  if (/学习|办公|面试|安静|插座|坐两小时|久坐/.test(text)) return "工作学习安静久坐方案";
-  if (/朋友|聚会|聊天|一起吃饭|饭后/.test(text)) return "朋友聚会优先方案";
-  if (/先去|拿东西|接人|途经|顺路|学校/.test(text)) return "顺路办事少绕路方案";
-  if (/约会|情侣|氛围|散步|甜品|展览/.test(text)) return "轻松约会氛围方案";
-  return "轻松半日成行";
-}
 
 function buildPlanReasons(routePlan: RoutePlan, topPoi?: ScoredPoi) {
   const reasons = ["更符合本次出行画像，而不是单纯按评分排序"];
@@ -46,6 +36,7 @@ function scrollToExecutionPanel() {
 export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCardProps) {
   const topPoi = rankedPois[0];
   const slots = routePlan.mainPlan?.slots.slice(0, 4) ?? [];
+  const personaConfig = getPersonaConfig(parseResult);
   const reasons = buildPlanReasons(routePlan, topPoi);
   const score = topPoi?.goabilityScore ?? 0;
 
@@ -54,7 +45,7 @@ export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCar
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-bold text-black/45">AI 推荐最佳方案</p>
-          <h2 className="mt-1 text-2xl font-extrabold tracking-normal text-meituan-ink">{inferPlanTitle(parseResult)}</h2>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-normal text-meituan-ink">{personaConfig.planTitle}</h2>
           <p className="mt-2 text-sm leading-6 text-black/62">先看结论：这是当前最适合直接出发的一套安排，后面仍保留地图、路线和备选细节。</p>
         </div>
         <div className="grid grid-cols-4 gap-2 text-center text-xs lg:min-w-[380px]">
@@ -94,14 +85,28 @@ export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCar
         </div>
 
         <div className="rounded-lg bg-meituan-gray p-3">
-          <p className="mb-3 text-sm font-extrabold text-black/78">为什么推荐</p>
-          <ul className="space-y-2 text-sm text-black/68">
-            {reasons.map((reason) => (
-              <li key={reason} className="rounded-lg bg-white px-3 py-2">
-                {reason}
-              </li>
-            ))}
-          </ul>
+          <div className="space-y-4">
+            <div>
+              <p className="mb-3 text-sm font-extrabold text-black/78">为什么适合你这次</p>
+              <ul className="space-y-2 text-sm text-black/68">
+                {personaConfig.bestPlanReasons.slice(0, 3).map((reason) => (
+                  <li key={reason} className="rounded-lg bg-white px-3 py-2">
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="mb-3 text-sm font-extrabold text-black/78">为什么推荐</p>
+              <ul className="space-y-2 text-sm text-black/68">
+                {reasons.slice(0, 3).map((reason) => (
+                  <li key={reason} className="rounded-lg bg-white px-3 py-2">
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -1,10 +1,21 @@
-import type { RoutePlan } from "@/lib/types";
+import { inferPersona } from "@/lib/persona";
+import type { ParseResult, RoutePlan } from "@/lib/types";
 
 type RouteTimelineProps = {
   routePlan?: RoutePlan;
+  parseResult?: ParseResult;
 };
 
-export function RouteTimeline({ routePlan }: RouteTimelineProps) {
+const fallbackCopy = {
+  friends: "这个替代方案离集合点更近，减少等人和临时改约成本。",
+  family: "这个替代方案转场更少，更适合带孩子时快速切换。",
+  date: "这个替代方案节奏更松，适合保留聊天和散步时间。",
+  work: "这个替代方案等待更短，不压缩学习/办公/准备时间。",
+  errand: "这个替代方案更顺路，方便先办事再停留或用餐。",
+  casual: "这个替代方案更灵活，适合按排队、天气或心情随时替换。",
+};
+
+export function RouteTimeline({ routePlan, parseResult }: RouteTimelineProps) {
   if (!routePlan) {
     return (
       <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
@@ -16,6 +27,7 @@ export function RouteTimeline({ routePlan }: RouteTimelineProps) {
 
   const fallbackPlans = routePlan.fallbackPlans ?? [];
   const mainSlots = routePlan.mainPlan?.slots ?? [];
+  const fallbackPersonaCopy = parseResult ? fallbackCopy[inferPersona(parseResult)] : "";
 
   return (
     <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
@@ -111,6 +123,7 @@ export function RouteTimeline({ routePlan }: RouteTimelineProps) {
                     {plan.diffFromMain.deltaCommuteMinutes >= 0 ? "+" : ""}{plan.diffFromMain.deltaCommuteMinutes}m
                   </div>
                 ) : null}
+                {fallbackPersonaCopy ? <div className="mt-2 rounded-md bg-yellow-50 px-3 py-2 text-xs font-semibold text-black/68">{fallbackPersonaCopy}</div> : null}
                 <div className="mt-3 space-y-2">
                   {plan.steps.slice(1, 3).map((step) => (
                     <div key={`${plan.id}-${step.time}-${step.title}`} className="rounded-md bg-meituan-gray px-3 py-2 text-xs text-black/70">

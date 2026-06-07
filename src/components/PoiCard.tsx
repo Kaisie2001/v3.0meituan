@@ -1,4 +1,5 @@
-import type { ScoredPoi } from "@/lib/types";
+import { getPersonaConfig } from "@/lib/persona";
+import type { ParseResult, ScoredPoi } from "@/lib/types";
 
 const levelLabel = {
   green: "高度推荐",
@@ -16,11 +17,15 @@ const levelClass = {
 
 type PoiCardProps = {
   poi: ScoredPoi;
+  parseResult: ParseResult;
   selected?: boolean;
   onSelect: (poi: ScoredPoi) => void;
 };
 
-export function PoiCard({ poi, selected, onSelect }: PoiCardProps) {
+export function PoiCard({ poi, parseResult, selected, onSelect }: PoiCardProps) {
+  const personaReason = getPersonaConfig(parseResult).poiReason;
+  const reasons = [personaReason, ...poi.reasons.filter((reason) => reason !== personaReason)];
+
   return (
     <article className={`rounded-lg border bg-white p-4 shadow-sm transition ${selected ? "border-meituan-yellow ring-2 ring-meituan-yellow/40" : "border-black/8"}`}>
       <div className="mb-3 flex items-start justify-between gap-3">
@@ -42,9 +47,9 @@ export function PoiCard({ poi, selected, onSelect }: PoiCardProps) {
 
       <div className="space-y-3 text-sm">
         <div>
-          <p className="font-bold">适合原因</p>
+          <p className="font-bold">场景匹配</p>
           <ul className="mt-1 space-y-1 text-black/68">
-            {poi.reasons.map((reason) => (
+            {reasons.map((reason) => (
               <li key={reason}>- {reason}</li>
             ))}
           </ul>
