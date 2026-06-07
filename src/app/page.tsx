@@ -13,10 +13,11 @@ import { RouteTimeline } from "@/components/RouteTimeline";
 import { TripPersonaCard } from "@/components/TripPersonaCard";
 import { ClarifyModal } from "@/components/ClarifyModal";
 import { RoutePreferenceModal } from "@/components/RoutePreferenceModal";
-import { defaultInputs } from "@/lib/parseIntent";
+import { defaultInputs, parseInput } from "@/lib/parseIntent";
 import { runAgent, runAgentFromParseResult } from "@/lib/runAgent";
 import { applyParseOverrides } from "@/lib/parsers/applyOverrides";
 import { applyRoutePrefs } from "@/lib/parsers/applyRoutePrefs";
+import { DEFAULT_PREFERENCE_SUMMARY, type PreferenceSubmitPayload } from "@/lib/preferenceSummary";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
 type AppScreen = "input" | "result" | "details" | "execute";
@@ -50,7 +51,9 @@ export default function Home() {
   const [clarifyOpen, setClarifyOpen] = useState(false);
   const [pendingParse, setPendingParse] = useState<ParseResult | null>(null);
   const [routePrefOpen, setRoutePrefOpen] = useState(false);
-  const [pendingRoutePrefParse, setPendingRoutePrefParse] = useState<ParseResult | null>(null);
+  const [preferencesConfigured, setPreferencesConfigured] = useState(false);
+  const [preferenceSummaryText, setPreferenceSummaryText] = useState(DEFAULT_PREFERENCE_SUMMARY);
+  const [savedPreferencePayload, setSavedPreferencePayload] = useState<PreferenceSubmitPayload | null>(null);
   const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [planningStep, setPlanningStep] = useState(0);
   const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("main");
@@ -90,6 +93,43 @@ export default function Home() {
     resetPlanSelection();
   }
 
+  function applyPreferencePayload(parseResult: ParseResult, payload: PreferenceSubmitPayload) {
+    const withTime = applyParseOverrides(parseResult, payload.intentPatch);
+    const withPrefs = applyRoutePrefs(withTime, payload.routePrefs);
+    return runAgentFromParseResult(withPrefs);
+  }
+
+  function openRoutePreferences() {
+    setRoutePrefOpen(true);
+  }
+
+  function handlePreferenceSubmit(payload: PreferenceSubmitPayload) {
+    setSavedPreferencePayload(payload);
+    setPreferencesConfigured(true);
+    setPreferenceSummaryText(payload.displaySummary);
+    setRoutePrefOpen(false);
+
+    if (screen === "result" || screen === "execute" || screen === "details") {
+      const nextResult = applyPreferencePayload(result.parseResult, payload);
+      setResult(nextResult);
+      setSelectedPoiId(undefined);
+      setActiveStep(STEP_COUNT);
+      setActiveSheetTab("main");
+      resetPlanSelection();
+      if (screen === "execute" || screen === "details") {
+        setScreen("result");
+      }
+    }
+  }
+
+  function resetPreferences() {
+    setSavedPreferencePayload(null);
+    setPreferencesConfigured(false);
+    setPreferenceSummaryText(DEFAULT_PREFERENCE_SUMMARY);
+  }
+
+  const routePrefInitialDraft = useMemo(() => parseInput(goal, wechat, seed).draft, [goal, wechat, seed]);
+
   const mapPois = useMemo(() => result.rankedPois, [result]);
   const selectedPoi = useMemo(() => {
     if (!selectedPoiId) return undefined;
@@ -128,7 +168,6 @@ export default function Home() {
 
   function finishPlanning(nextResult: AgentResult) {
     setResult(nextResult);
-    setPendingRoutePrefParse(null);
     setActiveStep(STEP_COUNT);
     setIsPlanningOpen(false);
     setLoading(false);
@@ -143,7 +182,8 @@ export default function Home() {
     setSelectedPoiId(undefined);
     resetPlanSelection();
 
-    const nextResult = runAgent(goal, wechat, seed);
+    const baseResult = runAgent(goal, wechat, seed);
+    const nextResult = savedPreferencePayload ? applyPreferencePayload(baseResult.parseResult, savedPreferencePayload) : baseResult;
     if (nextResult.parseResult.missingFields.length) {
       setIsPlanningOpen(false);
       setPendingParse(nextResult.parseResult);
@@ -189,6 +229,8 @@ export default function Home() {
                   onWechatChange={setWechat}
                   onSeedChange={setSeed}
                   onGenerate={handleGenerate}
+                  onOpenRoutePreferences={openRoutePreferences}
+                  hasRoutePreferences={preferencesConfigured}
                 />
               </div>
             ) : null}
@@ -219,6 +261,8 @@ export default function Home() {
                     onSelectMainPlan={handleSelectMainPlan}
                     onSelectFallbackPlan={handleSelectFallbackPlan}
                     onConfirmExecute={() => setScreen("execute")}
+                    preferenceSummary={preferenceSummaryText}
+                    onOpenRoutePreferences={openRoutePreferences}
                   />
                 </div>
 
@@ -281,12 +325,14 @@ export default function Home() {
               onSubmit={(patch) => {
                 if (!pendingParse) return;
                 const patchedParse = applyParseOverrides(pendingParse, patch);
-                const nextResult = runAgentFromParseResult(patchedParse);
+                let nextResult = runAgentFromParseResult(patchedParse);
+                if (savedPreferencePayload) {
+                  nextResult = applyPreferencePayload(nextResult.parseResult, savedPreferencePayload);
+                }
                 setResult(nextResult);
                 setSelectedPoiId(undefined);
                 setClarifyOpen(false);
                 setPendingParse(null);
-                setPendingRoutePrefParse(null);
                 setActiveStep(STEP_COUNT);
                 setActiveSheetTab("main");
                 resetPlanSelection();
@@ -295,34 +341,10 @@ export default function Home() {
             />
             <RoutePreferenceModal
               open={routePrefOpen}
-              onClose={() => {
-                if (!pendingRoutePrefParse) {
-                  setRoutePrefOpen(false);
-                  return;
-                }
-                const nextResult = runAgentFromParseResult(pendingRoutePrefParse);
-                setResult(nextResult);
-                setSelectedPoiId(undefined);
-                setRoutePrefOpen(false);
-                setPendingRoutePrefParse(null);
-                setActiveStep(STEP_COUNT);
-                setActiveSheetTab("main");
-                resetPlanSelection();
-                setScreen("result");
-              }}
-              onSubmit={(prefs) => {
-                if (!pendingRoutePrefParse) return;
-                const patchedParse = applyRoutePrefs(pendingRoutePrefParse, prefs);
-                const nextResult = runAgentFromParseResult(patchedParse);
-                setResult(nextResult);
-                setSelectedPoiId(undefined);
-                setRoutePrefOpen(false);
-                setPendingRoutePrefParse(null);
-                setActiveStep(STEP_COUNT);
-                setActiveSheetTab("main");
-                resetPlanSelection();
-                setScreen("result");
-              }}
+              initialIntent={result.parseResult.intent}
+              initialDraft={routePrefInitialDraft}
+              onClose={() => setRoutePrefOpen(false)}
+              onSubmit={handlePreferenceSubmit}
             />
             <PlanningModal open={isPlanningOpen} step={planningStep} />
           </div>

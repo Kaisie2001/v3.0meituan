@@ -27,6 +27,8 @@ type BottomPlanSheetProps = {
   onSelectMainPlan: () => void;
   onSelectFallbackPlan: (index: number) => void;
   onConfirmExecute?: () => void;
+  preferenceSummary?: string;
+  onOpenRoutePreferences?: () => void;
 };
 
 type CurrentPlanSummary = {
@@ -166,12 +168,16 @@ function buildCurrentPlanSummary(
 
 function MainTabContent({
   summary,
+  preferenceSummary,
+  onOpenRoutePreferences,
   switchFeedback,
   onConfirmExecute,
   onViewFallback,
   onSelectMainPlan,
 }: {
   summary: CurrentPlanSummary;
+  preferenceSummary?: string;
+  onOpenRoutePreferences?: () => void;
   switchFeedback: string | null;
   onConfirmExecute?: () => void;
   onViewFallback: () => void;
@@ -182,6 +188,24 @@ function MainTabContent({
       {switchFeedback ? (
         <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
       ) : null}
+
+      <div className="mb-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold text-black/45">当前规划约束</p>
+            <p className="mt-0.5 text-xs leading-5 text-black/65">{preferenceSummary ?? "系统按时间、距离、排队风险综合规划"}</p>
+          </div>
+          {onOpenRoutePreferences ? (
+            <button
+              type="button"
+              onClick={() => onOpenRoutePreferences?.()}
+              className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+            >
+              调整
+            </button>
+          ) : null}
+        </div>
+      </div>
 
       <div className="mb-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
@@ -308,7 +332,7 @@ function MainTabContent({
         <button
           type="button"
           className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
-          onClick={onConfirmExecute}
+          onClick={() => onConfirmExecute?.()}
         >
           确认并执行
         </button>
@@ -697,6 +721,8 @@ export function BottomPlanSheet({
   onSelectMainPlan,
   onSelectFallbackPlan,
   onConfirmExecute,
+  preferenceSummary,
+  onOpenRoutePreferences,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
   const [fallbackDetailIndex, setFallbackDetailIndex] = useState<number | null>(null);
@@ -758,6 +784,8 @@ export function BottomPlanSheet({
         {activeTab === "main" ? (
           <MainTabContent
             summary={currentPlanSummary}
+            preferenceSummary={preferenceSummary}
+            onOpenRoutePreferences={onOpenRoutePreferences}
             switchFeedback={switchFeedback}
             onConfirmExecute={onConfirmExecute}
             onViewFallback={() => {
