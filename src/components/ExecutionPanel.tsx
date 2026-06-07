@@ -47,6 +47,28 @@ function toReceiptLines(trace: ExecutionTraceStep[]) {
   return { receipts: uniqueReceipts, failures: uniqueFailures };
 }
 
+async function copyTextSafely(text: string) {
+  try {
+    const permission = await navigator.permissions?.query?.({ name: "clipboard-write" as PermissionName });
+    if (permission?.state !== "denied") {
+      await navigator.clipboard?.writeText(text);
+      return;
+    }
+  } catch {}
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    document.body.removeChild(textarea);
+  } catch {}
+}
+
 export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelProps) {
   const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
   const [running, setRunning] = useState(false);
@@ -107,11 +129,7 @@ export function ExecutionPanel({ actions, routePlan, intent }: ExecutionPanelPro
             <button
               type="button"
               className="rounded-lg bg-meituan-yellow px-3 py-1.5 text-xs font-bold text-meituan-ink hover:brightness-95"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(shareText);
-                } catch {}
-              }}
+              onClick={() => copyTextSafely(shareText)}
             >
               复制
             </button>
