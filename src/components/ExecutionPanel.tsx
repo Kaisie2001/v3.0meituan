@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { appendVoucherShareLine, BookingVoucherCard, buildBookingVoucherModel } from "@/components/BookingVoucherCard";
 import {
   buildContextualDoneSummary,
   buildContextualIdleActions,
@@ -119,6 +120,28 @@ export function ExecutionPanel({
 
   const receiptIds = useMemo(() => collectReceiptIds(trace), [trace]);
 
+  const bookingVoucher = useMemo(() => {
+    if (executionStatus !== "done" || !routePlan) return null;
+    return buildBookingVoucherModel({
+      routePlan,
+      travelSettings,
+      selectedPlanType,
+      selectedFallbackIndex,
+      currentPlanLabel,
+      partySize: intent.partySize ?? travelSettings.partySize,
+      receiptIds,
+    });
+  }, [
+    executionStatus,
+    routePlan,
+    travelSettings,
+    selectedPlanType,
+    selectedFallbackIndex,
+    currentPlanLabel,
+    intent.partySize,
+    receiptIds,
+  ]);
+
   const doneSummary = useMemo(() => {
     const traceHasReservation = trace.some((step) => step.toolName === "ReserveTable" && step.status === "success");
     const traceHasOrder = trace.some(
@@ -162,14 +185,16 @@ export function ExecutionPanel({
     const result = await executePromise;
     const shareStep = result.find((step) => step.toolName === "GenerateShareText" && step.status === "success");
     const originalShareText = (shareStep?.response as { shareText?: string } | undefined)?.shareText ?? "";
-    const enhancedShareText = buildEnhancedShareText({
-      originalShareText,
-      travelSettings,
-      currentPlanLabel,
-      selectedPlanType,
-      routePlan,
-      selectedFallbackIndex,
-    });
+    const enhancedShareText = appendVoucherShareLine(
+      buildEnhancedShareText({
+        originalShareText,
+        travelSettings,
+        currentPlanLabel,
+        selectedPlanType,
+        routePlan,
+        selectedFallbackIndex,
+      }),
+    );
 
     setTrace(result);
     setShareText(enhancedShareText);
@@ -285,15 +310,7 @@ export function ExecutionPanel({
             ))}
           </ul>
 
-          {Object.keys(receiptIds).length ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {Object.entries(receiptIds).map(([key, value]) => (
-                <span key={key} className="rounded-full bg-meituan-gray px-2.5 py-1 text-[11px] font-bold text-black/60">
-                  {key}: {value}
-                </span>
-              ))}
-            </div>
-          ) : null}
+          {bookingVoucher ? <BookingVoucherCard voucher={bookingVoucher} /> : null}
 
           {shareText ? (
             <div className="mt-4 rounded-xl border border-meituan-yellow/40 bg-yellow-50 p-3">
