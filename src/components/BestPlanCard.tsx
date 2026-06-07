@@ -7,6 +7,8 @@ type BestPlanCardProps = {
   routePlan: RoutePlan;
   rankedPois: ScoredPoi[];
   parseResult: ParseResult;
+  onViewDetails?: () => void;
+  onConfirmExecute?: () => void;
 };
 
 const slotTypeLabel = {
@@ -29,11 +31,7 @@ function buildPlanReasons(routePlan: RoutePlan, topPoi?: ScoredPoi) {
   return reasons.slice(0, 4);
 }
 
-function scrollToExecutionPanel() {
-  document.getElementById("execution-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCardProps) {
+export function BestPlanCard({ routePlan, rankedPois, parseResult, onViewDetails, onConfirmExecute }: BestPlanCardProps) {
   const topPoi = rankedPois[0];
   const slots = routePlan.mainPlan?.slots.slice(0, 4) ?? [];
   const personaConfig = getPersonaConfig(parseResult);
@@ -110,21 +108,31 @@ export function BestPlanCard({ routePlan, rankedPois, parseResult }: BestPlanCar
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button
-          type="button"
-          className="rounded-lg bg-meituan-yellow px-5 py-3 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
-          onClick={scrollToExecutionPanel}
-        >
-          确认并执行
-        </button>
-        <button type="button" className="rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-bold text-black/62 hover:bg-black/5">
-          换一个更近的
-        </button>
-        <button type="button" className="rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-bold text-black/62 hover:bg-black/5">
-          避开排队
-        </button>
-        <span className="text-xs font-semibold text-black/45 sm:ml-2">点击后到下方执行面板确认。</span>
+      <div className="mt-4 flex flex-col gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            className="rounded-lg bg-meituan-yellow px-5 py-3 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
+            onClick={onConfirmExecute}
+          >
+            确认并执行
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-bold text-black/62 hover:bg-black/5"
+            onClick={onViewDetails}
+          >
+            查看地图与备选
+          </button>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button type="button" className="rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-bold text-black/62 hover:bg-black/5">
+            换一个更近的
+          </button>
+          <button type="button" className="rounded-lg border border-black/10 bg-white px-5 py-3 text-sm font-bold text-black/62 hover:bg-black/5">
+            避开排队
+          </button>
+        </div>
       </div>
     </section>
   );
