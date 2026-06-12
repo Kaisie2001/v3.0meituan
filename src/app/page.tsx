@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import dynamic from "next/dynamic";
-import { BottomPlanSheet, type SelectedPlanType, type SheetTab } from "@/components/BottomPlanSheet";
+import { BottomPlanSheet } from "@/components/BottomPlanSheet";
 import { PlanningModal } from "@/components/PlanningModal";
 import { ExecutionPanel } from "@/components/ExecutionPanel";
 import { InputPanel } from "@/components/InputPanel";
@@ -27,9 +27,28 @@ import {
 import { buildExecutionPlanLabel, buildSelectedPlanSummary } from "@/lib/executionContext";
 import { DEMO_DEFAULT_STATE, getDemoScenarioById, type DemoScenarioId } from "@/lib/demoScenarios";
 import { buildMapPresentation } from "@/lib/mapPresentation";
+import {
+  appFlowReducer,
+  initialAppFlowState,
+  type AppFlowAction,
+  type AppFlowState,
+} from "@/lib/appFlowMachine";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
-type AppScreen = "input" | "result" | "details" | "execute";
+type PageFlowAction =
+  | AppFlowAction
+  | { type: "CLEAR_SELECTED_POI" }
+  | { type: "SET_SELECTED_POI"; poiId: string };
+
+function pageFlowReducer(state: AppFlowState, action: PageFlowAction): AppFlowState {
+  if (action.type === "CLEAR_SELECTED_POI") {
+    return { ...state, selectedPoiId: null };
+  }
+  if (action.type === "SET_SELECTED_POI") {
+    return { ...state, selectedPoiId: action.poiId };
+  }
+  return appFlowReducer(state, action);
+}
 
 const STEP_COUNT = 6;
 const PLANNING_STEP_MS = 500;
@@ -49,23 +68,27 @@ function ScreenBackButton({ label, onClick }: { label: string; onClick: () => vo
 }
 
 export default function Home() {
-  const [screen, setScreen] = useState<AppScreen>("input");
+  const [flowState, dispatchFlow] = useReducer(pageFlowReducer, initialAppFlowState);
+  const {
+    screen,
+    activeSheetTab,
+    selectedPlanType,
+    selectedFallbackIndex,
+    isPlanning,
+  } = flowState;
+  const selectedPoiId = flowState.selectedPoiId ?? undefined;
+
   const [goal, setGoal] = useState(defaultInputs.goal);
   const [wechat, setWechat] = useState(defaultInputs.wechat);
   const [seed, setSeed] = useState(defaultInputs.seed);
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AgentResult>(() => runAgent(defaultInputs.goal, defaultInputs.wechat, defaultInputs.seed));
-  const [selectedPoiId, setSelectedPoiId] = useState<string | undefined>(undefined);
   const [clarifyOpen, setClarifyOpen] = useState(false);
   const [pendingParse, setPendingParse] = useState<ParseResult | null>(null);
   const [travelSettings, setTravelSettings] = useState<TravelSettings>(DEFAULT_TRAVEL_SETTINGS);
   const [travelSettingsOpen, setTravelSettingsOpen] = useState(false);
-  const [isPlanningOpen, setIsPlanningOpen] = useState(false);
   const [planningStep, setPlanningStep] = useState(0);
-  const [activeSheetTab, setActiveSheetTab] = useState<SheetTab>("main");
-  const [selectedPlanType, setSelectedPlanType] = useState<SelectedPlanType>("main");
-  const [selectedFallbackIndex, setSelectedFallbackIndex] = useState<number | null>(null);
   const [activeDemoScenarioId, setActiveDemoScenarioId] = useState<DemoScenarioId | null>(null);
   const [executionPanelKey, setExecutionPanelKey] = useState(0);
 
@@ -91,15 +114,9 @@ export default function Home() {
     if (selectedPlanType !== "fallback") return;
     const count = result.routePlan.fallbackPlans?.length ?? 0;
     if (selectedFallbackIndex === null || selectedFallbackIndex < 0 || selectedFallbackIndex >= count) {
-      setSelectedPlanType("main");
-      setSelectedFallbackIndex(null);
+      dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
     }
   }, [result.routePlan.fallbackPlans, selectedPlanType, selectedFallbackIndex]);
-
-  function resetPlanSelection() {
-    setSelectedPlanType("main");
-    setSelectedFallbackIndex(null);
-  }
 
   function resetDemoState() {
     setGoal(DEMO_DEFAULT_STATE.goal);
@@ -107,19 +124,15 @@ export default function Home() {
     setSeed(DEMO_DEFAULT_STATE.seed);
     setTravelSettings(DEMO_DEFAULT_STATE.travelSettings);
     setActiveDemoScenarioId(null);
-    resetPlanSelection();
-    setActiveSheetTab("main");
-    setSelectedPoiId(undefined);
     setActiveStep(0);
     setLoading(false);
     setClarifyOpen(false);
     setPendingParse(null);
     setTravelSettingsOpen(false);
-    setIsPlanningOpen(false);
     setPlanningStep(0);
-    setScreen("input");
     setExecutionPanelKey((key) => key + 1);
     setResult(runAgent(DEMO_DEFAULT_STATE.goal, DEMO_DEFAULT_STATE.wechat, DEMO_DEFAULT_STATE.seed));
+    dispatchFlow({ type: "RESET_DEMO" });
   }
 
   function handleSelectDemoScenario(scenarioId: DemoScenarioId) {
@@ -131,29 +144,26 @@ export default function Home() {
     setSeed(scenario.seed);
     setTravelSettings(scenario.travelSettings);
     setActiveDemoScenarioId(scenarioId);
-    resetPlanSelection();
-    setActiveSheetTab("main");
-    setSelectedPoiId(undefined);
     setActiveStep(0);
     setLoading(false);
     setClarifyOpen(false);
     setPendingParse(null);
-    setIsPlanningOpen(false);
     setPlanningStep(0);
-    setScreen("input");
     setExecutionPanelKey((key) => key + 1);
+    dispatchFlow({ type: "BACK_TO_INPUT" });
+    dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
+    dispatchFlow({ type: "CLEAR_SELECTED_POI" });
+    dispatchFlow({ type: "PLAN_FAILED" });
   }
 
   function handleSelectFallbackPlan(index: number) {
     const count = result.routePlan.fallbackPlans?.length ?? 0;
     if (index < 0 || index >= count) return;
-    setSelectedPlanType("fallback");
-    setSelectedFallbackIndex(index);
-    setActiveSheetTab("main");
+    dispatchFlow({ type: "SELECT_FALLBACK", index });
   }
 
   function handleSelectMainPlan() {
-    resetPlanSelection();
+    dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
   }
 
   function applyTravelSettingsToResult(parseResult: ParseResult, settings: TravelSettings) {
@@ -174,12 +184,11 @@ export default function Home() {
     if (screen === "result" || screen === "execute" || screen === "details") {
       const nextResult = applyTravelSettingsToResult(result.parseResult, nextSettings);
       setResult(nextResult);
-      setSelectedPoiId(undefined);
       setActiveStep(STEP_COUNT);
-      setActiveSheetTab("main");
-      resetPlanSelection();
+      dispatchFlow({ type: "CLEAR_SELECTED_POI" });
+      dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
       if (screen === "execute" || screen === "details") {
-        setScreen("result");
+        dispatchFlow({ type: "OPEN_RESULT" });
       }
     }
   }
@@ -205,10 +214,11 @@ export default function Home() {
   }, [mapPois, result.rankedPois, selectedPoiId]);
 
   function handleSelectPoi(poi: ScoredPoi) {
-    setSelectedPoiId(poi.id);
     if (screen === "result") {
-      setActiveSheetTab("poi");
+      dispatchFlow({ type: "SELECT_POI", poiId: poi.id });
+      return;
     }
+    dispatchFlow({ type: "SET_SELECTED_POI", poiId: poi.id });
   }
 
   function handleDislikePoi(poi: ScoredPoi) {
@@ -223,33 +233,31 @@ export default function Home() {
     };
     const nextResult = runAgentFromParseResult(patchedParse);
     setResult(nextResult);
-    setSelectedPoiId(undefined);
     setActiveStep(STEP_COUNT);
-    resetPlanSelection();
+    dispatchFlow({ type: "CLEAR_SELECTED_POI" });
+    dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
   }
 
   function finishPlanning(nextResult: AgentResult) {
     setResult(nextResult);
     setActiveStep(STEP_COUNT);
-    setIsPlanningOpen(false);
     setLoading(false);
-    setActiveSheetTab("main");
-    resetPlanSelection();
-    setScreen("result");
+    dispatchFlow({ type: "PLAN_SUCCEEDED" });
+    dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
   }
 
   function handleGenerate() {
     setLoading(true);
     setActiveStep(1);
-    setSelectedPoiId(undefined);
-    resetPlanSelection();
+    dispatchFlow({ type: "CLEAR_SELECTED_POI" });
+    dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
 
     const goalForAgent = buildGoalWithTravelSettings(goal, travelSettings);
     const baseResult = runAgent(goalForAgent, wechat, seed);
     const nextResult = applyTravelSettingsToResult(baseResult.parseResult, travelSettings);
 
     if (nextResult.parseResult.missingFields.length) {
-      setIsPlanningOpen(false);
+      dispatchFlow({ type: "PLAN_FAILED" });
       setPendingParse(nextResult.parseResult);
       setClarifyOpen(true);
       setLoading(false);
@@ -257,7 +265,7 @@ export default function Home() {
       return;
     }
 
-    setIsPlanningOpen(true);
+    dispatchFlow({ type: "START_PLANNING" });
     setPlanningStep(0);
 
     let step = 0;
@@ -325,12 +333,12 @@ export default function Home() {
                     parseResult={result.parseResult}
                     selectedPoi={selectedPoi}
                     activeTab={activeSheetTab}
-                    onTabChange={setActiveSheetTab}
+                    onTabChange={(tab) => dispatchFlow({ type: "SET_SHEET_TAB", tab })}
                     selectedPlanType={selectedPlanType}
                     selectedFallbackIndex={selectedFallbackIndex}
                     onSelectMainPlan={handleSelectMainPlan}
                     onSelectFallbackPlan={handleSelectFallbackPlan}
-                    onConfirmExecute={() => setScreen("execute")}
+                    onConfirmExecute={() => dispatchFlow({ type: "OPEN_EXECUTE" })}
                     travelSettings={travelSettings}
                     travelSettingsSummary={travelSettingsSummary}
                     onOpenTravelSettings={openTravelSettings}
@@ -340,7 +348,7 @@ export default function Home() {
                 <header className="relative z-30 flex shrink-0 items-center gap-2 border-b border-black/5 bg-white/95 px-3 py-2.5 backdrop-blur-sm">
                   <button
                     type="button"
-                    onClick={() => setScreen("input")}
+                    onClick={() => dispatchFlow({ type: "BACK_TO_INPUT" })}
                     className="rounded-lg px-1 py-1 text-sm font-bold text-black/62 transition hover:text-black/85"
                   >
                     ← 返回
@@ -355,7 +363,7 @@ export default function Home() {
 
             {screen === "details" ? (
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-                <ScreenBackButton label="返回主方案" onClick={() => setScreen("result")} />
+                <ScreenBackButton label="返回主方案" onClick={() => dispatchFlow({ type: "OPEN_RESULT" })} />
                 <LeafletPlannerMap
                   pois={mapPois}
                   selectedPoiId={selectedPoiId}
@@ -369,7 +377,11 @@ export default function Home() {
                   selectedFallbackIndex={selectedFallbackIndex}
                 />
                 {selectedPoi ? (
-                  <PoiDetailPanel poi={selectedPoi} onClose={() => setSelectedPoiId(undefined)} onDislike={handleDislikePoi} />
+                  <PoiDetailPanel
+                    poi={selectedPoi}
+                    onClose={() => dispatchFlow({ type: "CLEAR_SELECTED_POI" })}
+                    onDislike={handleDislikePoi}
+                  />
                 ) : null}
                 <RecommendationPanel
                   pois={result.rankedPois}
@@ -385,7 +397,7 @@ export default function Home() {
 
             {screen === "execute" ? (
               <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-                <ScreenBackButton label="返回方案" onClick={() => setScreen("result")} />
+                <ScreenBackButton label="返回方案" onClick={() => dispatchFlow({ type: "OPEN_RESULT" })} />
                 <ExecutionPanel
                   key={executionPanelKey}
                   routePlan={result.routePlan}
@@ -418,16 +430,15 @@ export default function Home() {
                 const patchedParse = applyParseOverrides(pendingParse, patch);
                 const nextResult = applyTravelSettingsToResult(patchedParse, travelSettings);
                 setResult(nextResult);
-                setSelectedPoiId(undefined);
                 setClarifyOpen(false);
                 setPendingParse(null);
                 setActiveStep(STEP_COUNT);
-                setActiveSheetTab("main");
-                resetPlanSelection();
-                setScreen("result");
+                dispatchFlow({ type: "PLAN_SUCCEEDED" });
+                dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
+                dispatchFlow({ type: "CLEAR_SELECTED_POI" });
               }}
             />
-            <PlanningModal open={isPlanningOpen} step={planningStep} />
+            <PlanningModal open={isPlanning} step={planningStep} />
           </div>
         </div>
       </main>
