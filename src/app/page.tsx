@@ -6,6 +6,8 @@ import { BottomPlanSheet } from "@/components/BottomPlanSheet";
 import { PlanningModal } from "@/components/PlanningModal";
 import { ExecutionSheet } from "@/components/ExecutionSheet";
 import { InputPanel } from "@/components/InputPanel";
+import { HomeHeader } from "@/components/HomeHeader";
+import { HomeMapPlaceholder } from "@/components/HomeMapPlaceholder";
 import { IntentSummary } from "@/components/IntentSummary";
 import { PoiDetailPanel } from "@/components/PoiDetailPanel";
 import { RecommendationPanel } from "@/components/RecommendationPanel";
@@ -306,25 +308,41 @@ export default function Home() {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <div className="relative h-full overflow-hidden">
             {screen === "input" ? (
-              <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-                <InputPanel
-                  goal={goal}
-                  wechat={wechat}
-                  seed={seed}
-                  loading={loading}
-                  travelSettingsSummary={travelSettingsSummary}
-                  activeDemoScenarioId={activeDemoScenarioId}
-                  onGoalChange={(value) => {
-                    setGoal(value);
-                    setActiveDemoScenarioId(null);
-                  }}
-                  onWechatChange={setWechat}
-                  onSeedChange={setSeed}
-                  onOpenTravelSettings={openTravelSettings}
-                  onSelectDemoScenario={handleSelectDemoScenario}
-                  onResetDemo={resetDemoState}
-                  onGenerate={handleGenerate}
-                />
+              <div data-testid="home-screen" className="relative flex h-full flex-col overflow-hidden bg-[#e8edf2]">
+                <HomeHeader onResetDemo={resetDemoState} />
+
+                <div className="relative min-h-0 flex-1">
+                  <HomeMapPlaceholder className="absolute inset-0 h-full w-full" />
+                </div>
+
+                <div className="relative z-10 shrink-0">
+                  <div className="overflow-hidden rounded-t-[24px] border-t border-white/80 bg-white shadow-[0_-10px_36px_rgba(15,23,42,0.14)]">
+                    <div className="flex justify-center pt-2.5">
+                      <div className="h-1 w-10 rounded-full bg-black/10" aria-hidden="true" />
+                    </div>
+                    <div className="max-h-[min(58vh,500px)] overflow-y-auto overscroll-contain px-3 pb-4 pt-1">
+                      <InputPanel
+                        variant="sheet"
+                        goal={goal}
+                        wechat={wechat}
+                        seed={seed}
+                        loading={loading}
+                        travelSettingsSummary={travelSettingsSummary}
+                        activeDemoScenarioId={activeDemoScenarioId}
+                        onGoalChange={(value) => {
+                          setGoal(value);
+                          setActiveDemoScenarioId(null);
+                        }}
+                        onWechatChange={setWechat}
+                        onSeedChange={setSeed}
+                        onOpenTravelSettings={openTravelSettings}
+                        onSelectDemoScenario={handleSelectDemoScenario}
+                        onResetDemo={resetDemoState}
+                        onGenerate={handleGenerate}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : null}
 
