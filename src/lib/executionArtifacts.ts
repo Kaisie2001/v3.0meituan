@@ -9,7 +9,11 @@ export type QueueStatusStep = {
   state: "done" | "active" | "pending";
 };
 
-export type QueueExecutionArtifact = {
+type ArtifactBase = {
+  id: string;
+};
+
+export type QueueExecutionArtifact = ArtifactBase & {
   type: "queue";
   title: "排队详情";
   venueName: string;
@@ -25,7 +29,7 @@ export type QueueExecutionArtifact = {
   statusSteps: QueueStatusStep[];
 };
 
-export type ReservationExecutionArtifact = {
+export type ReservationExecutionArtifact = ArtifactBase & {
   type: "reservation";
   title: "已模拟预约";
   venueName: string;
@@ -35,7 +39,7 @@ export type ReservationExecutionArtifact = {
   note: string;
 };
 
-export type VoucherExecutionArtifact = {
+export type VoucherExecutionArtifact = ArtifactBase & {
   type: "voucher";
   title: "已生成核销码";
   venueName: string;
@@ -44,7 +48,7 @@ export type VoucherExecutionArtifact = {
   note: string;
 };
 
-export type ShareExecutionArtifact = {
+export type ShareExecutionArtifact = ArtifactBase & {
   type: "share";
   title: "已生成可分享计划";
   summary: string;
@@ -58,6 +62,12 @@ export type ExecutionArtifact =
   | VoucherExecutionArtifact
   | ShareExecutionArtifact;
 
+/**
+ * Phase 1 bundle: full artifact list with primary fields copied onto the array
+ * for legacy single-artifact UI consumers (phase 2 will read the list directly).
+ */
+export type ExecutionArtifactsResult = ExecutionArtifact[] & ExecutionArtifact;
+
 const VOUCHER_SIGNALS = [
   "ticket",
   "event",
@@ -70,7 +80,13 @@ const VOUCHER_SIGNALS = [
   "团购",
   "核销",
   "入场",
+  "亲子",
+  "亲子馆",
+  "乐园",
+  "kid",
 ];
+
+const PRIMARY_TYPE_ORDER: ExecutionArtifact["type"][] = ["queue", "reservation", "voucher", "share"];
 
 function hashSeed(seed: string) {
   let hash = 2166136261;
@@ -124,7 +140,7 @@ function isVoucherPoi(poi?: ScoredPoi) {
 function isDiningContext(poi?: ScoredPoi, slotType?: RouteSlot["slotType"]) {
   if (!poi) return false;
   if (slotType === "food") return poi.category === "restaurant" || poi.category === "cafe";
-  return poi.category === "restaurant";
+  return poi.category === "restaurant" || poi.category === "cafe";
 }
 
 function hasQueueContext(poi: ScoredPoi | undefined, routePriority: RoutePriorityChoice) {
@@ -166,43 +182,29 @@ function shouldPreferRestaurantDining(slots: RouteSlot[], routePriority: RoutePr
   return onlyLeadInNodes && MEAL_ROUTE_PRIORITIES.includes(routePriority);
 }
 
-function pickPrimarySlot(slots: RouteSlot[]) {
-  return slots.find((slot) => slot.slotType === "food") ?? slots.find((slot) => slot.slotType === "activity") ?? slots[0];
-}
-
-function pickVoucherSlot(slots: RouteSlot[]) {
-  return slots.find((slot) => isVoucherPoi(slot.poi)) ?? null;
+function shouldGenerateRestaurantArtifact(
+  slot: RouteSlot,
+  slots: RouteSlot[],
+  routePriority: RoutePriorityChoice,
+) {
+  if (slot.slotType !== "food" || slot.poi?.category !== "restaurant") return false;
+  return shouldPreferRestaurantDining(slots, routePriority);
 }
 
 function pickRestaurantFoodSlot(slots: RouteSlot[]) {
   return slots.find((slot) => slot.slotType === "food" && slot.poi?.category === "restaurant") ?? null;
 }
 
-function pickCafeFoodSlot(slots: RouteSlot[]) {
-  return slots.find((slot) => slot.slotType === "food" && slot.poi?.category === "cafe") ?? null;
+function selectPrimaryExecutionArtifact(artifacts: ExecutionArtifact[]) {
+  for (const type of PRIMARY_TYPE_ORDER) {
+    const match = artifacts.find((artifact) => artifact.type === type);
+    if (match) return match;
+  }
+  return artifacts[0];
 }
 
-function buildDiningArtifact(params: {
-  poi: ScoredPoi;
-  seed: string;
-  travelSettings: TravelSettings;
-  partySize: number;
-  routePriority: RoutePriorityChoice;
-}): QueueExecutionArtifact | ReservationExecutionArtifact {
-  if (hasQueueContext(params.poi, params.routePriority)) {
-    return buildQueueArtifact({
-      poi: params.poi,
-      seed: params.seed,
-      travelSettings: params.travelSettings,
-      partySize: params.partySize,
-    });
-  }
-  return buildReservationArtifact({
-    poi: params.poi,
-    travelSettings: params.travelSettings,
-    partySize: params.partySize,
-    seed: params.seed,
-  });
+function buildArtifactId(poiId: string, type: ExecutionArtifact["type"], slotIndex: number) {
+  return `${poiId}-${type}-${slotIndex}`;
 }
 
 function formatTimeLabel(travelSettings: TravelSettings) {
@@ -246,6 +248,7 @@ function formatQueueStartedAt(travelSettings: TravelSettings) {
 }
 
 function buildQueueArtifact(params: {
+  id: string;
   poi: ScoredPoi;
   seed: string;
   travelSettings: TravelSettings;
@@ -259,6 +262,7 @@ function buildQueueArtifact(params: {
   const number = stablePick(params.seed, 2, 18, 99);
 
   return {
+    id: params.id,
     type: "queue",
     title: "排队详情",
     venueName: safeName(params.poi.name, "餐厅"),
@@ -280,12 +284,14 @@ function buildQueueArtifact(params: {
 }
 
 function buildReservationArtifact(params: {
+  id: string;
   poi: ScoredPoi;
   travelSettings: TravelSettings;
   partySize: number;
   seed: string;
 }): ReservationExecutionArtifact {
   return {
+    id: params.id,
     type: "reservation",
     title: "已模拟预约",
     venueName: safeName(params.poi.name, "餐厅"),
@@ -297,12 +303,16 @@ function buildReservationArtifact(params: {
 }
 
 function buildVoucherArtifact(params: {
+  id: string;
   poi: ScoredPoi;
   seed: string;
   receiptIds: Record<string, string>;
   currentPlanLabel: string;
+  slotIndex: number;
 }): VoucherExecutionArtifact {
-  const ticketId = params.receiptIds.ticketId ?? stableMockCode(`${params.seed}-ticket`);
+  const ticketId =
+    params.receiptIds.ticketId ??
+    stableMockCode(`${params.seed}-ticket-${params.slotIndex}`);
   const qrPayload = buildQrSeed({
     planLabel: params.currentPlanLabel,
     ticketId,
@@ -310,6 +320,7 @@ function buildVoucherArtifact(params: {
   });
 
   return {
+    id: params.id,
     type: "voucher",
     title: "已生成核销码",
     venueName: safeName(params.poi.name, "活动场地"),
@@ -320,10 +331,12 @@ function buildVoucherArtifact(params: {
 }
 
 function buildShareArtifact(params: {
+  id: string;
   summary: string;
   shareText: string;
 }): ShareExecutionArtifact {
   return {
+    id: params.id,
     type: "share",
     title: "已生成可分享计划",
     summary: params.summary,
@@ -332,9 +345,139 @@ function buildShareArtifact(params: {
   };
 }
 
+function buildSlotArtifact(params: {
+  slot: RouteSlot;
+  slotIndex: number;
+  slots: RouteSlot[];
+  baseSeed: string;
+  travelSettings: TravelSettings;
+  partySize: number;
+  currentPlanLabel: string;
+  receiptIds: Record<string, string>;
+  routePriority: RoutePriorityChoice;
+}): ExecutionArtifact | null {
+  const poi = params.slot.poi;
+  if (!poi) return null;
+
+  const slotSeed = `${params.baseSeed}|${poi.id}|${params.slotIndex}`;
+
+  if (params.slot.slotType === "activity" || params.slot.slotType === "extra") {
+    if (isVoucherPoi(poi)) {
+      return buildVoucherArtifact({
+        id: buildArtifactId(poi.id, "voucher", params.slotIndex),
+        poi,
+        seed: slotSeed,
+        receiptIds: params.receiptIds,
+        currentPlanLabel: params.currentPlanLabel,
+        slotIndex: params.slotIndex,
+      });
+    }
+    return null;
+  }
+
+  if (!isDiningContext(poi, params.slot.slotType)) return null;
+
+  if (poi.category === "cafe") {
+    return buildReservationArtifact({
+      id: buildArtifactId(poi.id, "reservation", params.slotIndex),
+      poi,
+      travelSettings: params.travelSettings,
+      partySize: params.partySize,
+      seed: slotSeed,
+    });
+  }
+
+  if (poi.category === "restaurant") {
+    if (!shouldGenerateRestaurantArtifact(params.slot, params.slots, params.routePriority)) {
+      return null;
+    }
+
+    if (hasQueueContext(poi, params.routePriority)) {
+      return buildQueueArtifact({
+        id: buildArtifactId(poi.id, "queue", params.slotIndex),
+        poi,
+        seed: slotSeed,
+        travelSettings: params.travelSettings,
+        partySize: params.partySize,
+      });
+    }
+
+    return buildReservationArtifact({
+      id: buildArtifactId(poi.id, "reservation", params.slotIndex),
+      poi,
+      travelSettings: params.travelSettings,
+      partySize: params.partySize,
+      seed: slotSeed,
+    });
+  }
+
+  return null;
+}
+
+function buildExecutionArtifactList(params: {
+  routePlan: RoutePlan;
+  travelSettings: TravelSettings;
+  selectedPlanType: SelectedPlanType;
+  selectedFallbackIndex: number | null;
+  currentPlanLabel: string;
+  partySize: number;
+  shareText: string;
+  planSummary: string;
+  receiptIds?: Record<string, string>;
+}): ExecutionArtifact[] {
+  const slots = resolveActiveSlots(params.routePlan, params.selectedPlanType, params.selectedFallbackIndex);
+  const receiptIds = params.receiptIds ?? {};
+  const routePriority = params.travelSettings.routePriority;
+
+  const baseSeed = [
+    params.currentPlanLabel,
+    params.selectedPlanType,
+    String(params.selectedFallbackIndex ?? "main"),
+    routePriority,
+  ].join("|");
+
+  const nodeArtifacts: ExecutionArtifact[] = [];
+
+  slots.forEach((slot, slotIndex) => {
+    const artifact = buildSlotArtifact({
+      slot,
+      slotIndex,
+      slots,
+      baseSeed,
+      travelSettings: params.travelSettings,
+      partySize: params.partySize,
+      currentPlanLabel: params.currentPlanLabel,
+      receiptIds,
+      routePriority,
+    });
+    if (artifact) nodeArtifacts.push(artifact);
+  });
+
+  const shareArtifact = buildShareArtifact({
+    id: `${params.currentPlanLabel}-share`,
+    summary: params.planSummary || "已按当前方案生成可执行行程。",
+    shareText: params.shareText,
+  });
+
+  if (nodeArtifacts.length === 0) {
+    return [shareArtifact];
+  }
+
+  return [...nodeArtifacts, shareArtifact];
+}
+
+function bundleExecutionArtifacts(artifacts: ExecutionArtifact[]): ExecutionArtifactsResult {
+  const primary = selectPrimaryExecutionArtifact(artifacts);
+  return Object.assign(artifacts, primary) as ExecutionArtifactsResult;
+}
+
 export function getExecutionArtifactPrimaryActionLabel(type: ExecutionArtifact["type"]) {
   if (type === "queue" || type === "reservation" || type === "voucher") return "查看路线";
   return "查看最终行程";
+}
+
+export function pickPrimaryExecutionArtifact(artifacts: ExecutionArtifact[]) {
+  return selectPrimaryExecutionArtifact(artifacts);
 }
 
 export function buildExecutionArtifacts(params: {
@@ -347,65 +490,8 @@ export function buildExecutionArtifacts(params: {
   shareText: string;
   planSummary: string;
   receiptIds?: Record<string, string>;
-}): ExecutionArtifact {
-  const slots = resolveActiveSlots(params.routePlan, params.selectedPlanType, params.selectedFallbackIndex);
-  const primarySlot = pickPrimarySlot(slots);
-  const primaryPoi = primarySlot?.poi;
-  const restaurantFoodSlot = pickRestaurantFoodSlot(slots);
-  const cafeFoodSlot = pickCafeFoodSlot(slots);
-  const voucherSlot = pickVoucherSlot(slots);
-  const receiptIds = params.receiptIds ?? {};
-  const routePriority = params.travelSettings.routePriority;
-
-  const seed = [
-    params.currentPlanLabel,
-    params.selectedPlanType,
-    String(params.selectedFallbackIndex ?? "main"),
-    restaurantFoodSlot?.poi?.id ?? cafeFoodSlot?.poi?.id ?? voucherSlot?.poi?.id ?? primaryPoi?.id ?? "plan",
-    routePriority,
-  ].join("|");
-
-  if (restaurantFoodSlot?.poi && shouldPreferRestaurantDining(slots, routePriority)) {
-    return buildDiningArtifact({
-      poi: restaurantFoodSlot.poi,
-      seed,
-      travelSettings: params.travelSettings,
-      partySize: params.partySize,
-      routePriority,
-    });
-  }
-
-  if (voucherSlot?.poi) {
-    return buildVoucherArtifact({
-      poi: voucherSlot.poi,
-      seed,
-      receiptIds,
-      currentPlanLabel: params.currentPlanLabel,
-    });
-  }
-
-  if (cafeFoodSlot?.poi) {
-    return buildReservationArtifact({
-      poi: cafeFoodSlot.poi,
-      travelSettings: params.travelSettings,
-      partySize: params.partySize,
-      seed,
-    });
-  }
-
-  if (primaryPoi?.category === "cafe") {
-    return buildReservationArtifact({
-      poi: primaryPoi,
-      travelSettings: params.travelSettings,
-      partySize: params.partySize,
-      seed,
-    });
-  }
-
-  return buildShareArtifact({
-    summary: params.planSummary || "已按当前方案生成可执行行程。",
-    shareText: params.shareText,
-  });
+}): ExecutionArtifactsResult {
+  return bundleExecutionArtifacts(buildExecutionArtifactList(params));
 }
 
 /** @internal for tests */
@@ -414,4 +500,5 @@ export const executionArtifactRules = {
   isDiningContext,
   hasQueueContext,
   shouldPreferRestaurantDining,
+  buildExecutionArtifactList,
 };

@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { runAgent } from "@/lib/runAgent";
 import { applyTravelSettingsToPlan } from "@/lib/applyTravelSettingsToPlan";
-import { buildExecutionArtifacts, executionArtifactRules, getExecutionArtifactPrimaryActionLabel, type ExecutionArtifact } from "@/lib/executionArtifacts";
+import {
+  buildExecutionArtifacts,
+  executionArtifactRules,
+  getExecutionArtifactPrimaryActionLabel,
+  type ExecutionArtifact,
+} from "@/lib/executionArtifacts";
 import { scenarioFixtures } from "@/lib/scenarioFixtures";
 import type { RoutePlan, RouteSlot, ScoredPoi } from "@/lib/types";
-import { DEFAULT_TRAVEL_SETTINGS, type TravelSettings } from "@/lib/preferenceSummary";
+import { DEFAULT_TRAVEL_SETTINGS } from "@/lib/preferenceSummary";
 
 function makePoi(overrides: Partial<ScoredPoi> & { id: string; name: string }): ScoredPoi {
   return {
@@ -84,9 +89,29 @@ const baseParams = {
   receiptIds: {},
 };
 
+function typesOf(artifacts: ExecutionArtifact[]) {
+  return artifacts.map((artifact) => artifact.type);
+}
+
+function assertArtifactsValid(artifacts: ExecutionArtifact[]) {
+  expect(Array.isArray(artifacts)).toBe(true);
+  expect(artifacts.length).toBeGreaterThan(0);
+  expect(JSON.stringify(artifacts)).not.toMatch(/undefined|NaN/);
+
+  for (const artifact of artifacts) {
+    expect(artifact.id.trim().length).toBeGreaterThan(0);
+    expect(artifact.title.trim().length).toBeGreaterThan(0);
+    if (artifact.type === "share") {
+      expect(artifact.summary.trim().length).toBeGreaterThan(0);
+    } else {
+      expect(artifact.venueName.trim().length).toBeGreaterThan(0);
+    }
+  }
+}
+
 describe("executionArtifacts", () => {
-  it("builds queue artifact for restaurant with queue priority", () => {
-    const artifact = buildExecutionArtifacts({
+  it("returns an array with queue and share for restaurant queue priority", () => {
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(makePoi({ id: "r1", name: "Hotpot Garden", queueMinutes: 20, riskTags: ["排队长"] })),
@@ -94,23 +119,25 @@ describe("executionArtifacts", () => {
       travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue" },
     });
 
-    expect(artifact.type).toBe("queue");
-    if (artifact.type === "queue") {
-      expect(artifact.title).toBe("排队详情");
-      expect(artifact.queueNumber).toMatch(/^[ABC]\d+$/);
-      expect(artifact.queueTableType).toMatch(/小桌|中桌|大桌/);
-      expect(artifact.aheadCount).toBeGreaterThan(0);
-      expect(artifact.estimatedWaitMinutes).toMatch(/分钟/);
-      expect(artifact.queueStartedAt).toMatch(/^\d{2}:\d{2}$/);
-      expect(artifact.phoneMasked).toMatch(/^\d{3}\*{4}\d{4}$/);
-      expect(artifact.statusSteps[1]?.state).toBe("active");
-      expect(JSON.stringify(artifact)).not.toMatch(/undefined|NaN/);
-      expect(JSON.stringify(artifact)).not.toContain("已模拟预约");
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["queue", "share"]);
+
+    const queue = artifacts.find((artifact) => artifact.type === "queue");
+    expect(queue?.title).toBe("排队详情");
+    if (queue?.type === "queue") {
+      expect(queue.queueNumber).toMatch(/^[ABC]\d+$/);
+      expect(queue.queueTableType).toMatch(/小桌|中桌|大桌/);
+      expect(queue.aheadCount).toBeGreaterThan(0);
+      expect(queue.estimatedWaitMinutes).toMatch(/分钟/);
+      expect(queue.queueStartedAt).toMatch(/^\d{2}:\d{2}$/);
+      expect(queue.phoneMasked).toMatch(/^\d{3}\*{4}\d{4}$/);
+      expect(queue.statusSteps[1]?.state).toBe("active");
+      expect(JSON.stringify(queue)).not.toContain("已模拟预约");
     }
   });
 
-  it("builds reservation artifact for restaurant without strong queue context", () => {
-    const artifact = buildExecutionArtifacts({
+  it("returns reservation and share for restaurant without strong queue context", () => {
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(
@@ -126,16 +153,19 @@ describe("executionArtifacts", () => {
       travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "time" },
     });
 
-    expect(artifact.type).toBe("reservation");
-    if (artifact.type === "reservation") {
-      expect(artifact.title).toBe("已模拟预约");
-      expect(artifact.status).toMatch(/确认|预约/);
-      expect(artifact.partySize).toBe(2);
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["reservation", "share"]);
+
+    const reservation = artifacts.find((artifact) => artifact.type === "reservation");
+    if (reservation?.type === "reservation") {
+      expect(reservation.title).toBe("已模拟预约");
+      expect(reservation.status).toMatch(/确认|预约/);
+      expect(reservation.partySize).toBe(2);
     }
   });
 
-  it("prefers queue artifact over voucher when plan includes restaurant food slot", () => {
-    const artifact = buildExecutionArtifacts({
+  it("generates queue, voucher, and share for restaurant plus ticket activity", () => {
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(
@@ -162,16 +192,23 @@ describe("executionArtifacts", () => {
       partySize: 4,
     });
 
-    expect(artifact.type).toBe("queue");
-    if (artifact.type === "queue") {
-      expect(artifact.venueName).toBe("Plain Table");
-      expect(artifact.title).toBe("排队详情");
-      expect(JSON.stringify(artifact)).not.toContain("已模拟预约");
+    assertArtifactsValid(artifacts);
+    expect(artifacts.length).toBeGreaterThanOrEqual(3);
+    expect(typesOf(artifacts)).toEqual(["voucher", "queue", "share"]);
+
+    const queue = artifacts.find((artifact) => artifact.type === "queue");
+    const voucher = artifacts.find((artifact) => artifact.type === "voucher");
+    if (queue?.type === "queue") {
+      expect(queue.venueName).toBe("Plain Table");
+      expect(queue.title).toBe("排队详情");
+    }
+    if (voucher?.type === "voucher") {
+      expect(voucher.venueName).toBe("Kid Zone 奇趣亲子馆");
     }
   });
 
   it("builds voucher artifact for ticket-like activity nodes", () => {
-    const artifact = buildExecutionArtifacts({
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(
@@ -188,15 +225,18 @@ describe("executionArtifacts", () => {
       travelSettings: DEFAULT_TRAVEL_SETTINGS,
     });
 
-    expect(artifact.type).toBe("voucher");
-    if (artifact.type === "voucher") {
-      expect(artifact.code).toMatch(/^MT-/);
-      expect(artifact.qrPayload.length).toBeGreaterThan(0);
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["voucher", "share"]);
+
+    const voucher = artifacts.find((artifact) => artifact.type === "voucher");
+    if (voucher?.type === "voucher") {
+      expect(voucher.code).toMatch(/^MT-/);
+      expect(voucher.qrPayload.length).toBeGreaterThan(0);
     }
   });
 
   it("builds share artifact for general itinerary plans", () => {
-    const artifact = buildExecutionArtifacts({
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(
@@ -213,15 +253,17 @@ describe("executionArtifacts", () => {
       travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "distance" },
     });
 
-    expect(artifact.type).toBe("share");
-    if (artifact.type === "share") {
-      expect(artifact.shareText).toContain("今晚安排如下");
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["share"]);
+    const share = artifacts[0];
+    if (share?.type === "share") {
+      expect(share.shareText).toContain("今晚安排如下");
     }
   });
 
   it("handles missing poi fields without undefined or NaN", () => {
     const agent = runAgent("下午帮同事买咖啡顺便处理工作", "", "");
-    const artifact = buildExecutionArtifacts({
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: agent.routePlan,
       travelSettings: DEFAULT_TRAVEL_SETTINGS,
@@ -229,8 +271,8 @@ describe("executionArtifacts", () => {
       planSummary: "",
     });
 
-    expect(JSON.stringify(artifact)).not.toMatch(/undefined|NaN/);
-    expect(["queue", "reservation", "voucher", "share"]).toContain(artifact.type);
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts).every((type) => ["queue", "reservation", "voucher", "share"].includes(type))).toBe(true);
   });
 
   it("detects voucher signals from exhibition tags", () => {
@@ -245,8 +287,8 @@ describe("executionArtifacts", () => {
     expect(getExecutionArtifactPrimaryActionLabel("share")).toBe("查看最终行程");
   });
 
-  it("builds voucher for ticket-first activity plans without meal priority", () => {
-    const artifact = buildExecutionArtifacts({
+  it("builds voucher without restaurant artifact when meal priority is low", () => {
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(
@@ -272,15 +314,13 @@ describe("executionArtifacts", () => {
       partySize: 3,
     });
 
-    expect(artifact.type).toBe("voucher");
-    if (artifact.type === "voucher") {
-      expect(artifact.venueName).toBe("Kid Zone 奇趣亲子馆");
-      expect(artifact.title).toBe("已生成核销码");
-    }
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["voucher", "share"]);
+    expect(artifacts.find((artifact) => artifact.type === "voucher")?.venueName).toBe("Kid Zone 奇趣亲子馆");
   });
 
-  it("builds reservation for work-like cafe food slot", () => {
-    const artifact = buildExecutionArtifacts({
+  it("builds reservation and share for work-like cafe food slot", () => {
+    const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
         makeSlot(
@@ -298,56 +338,50 @@ describe("executionArtifacts", () => {
       partySize: 1,
     });
 
-    expect(artifact.type).toBe("reservation");
-    if (artifact.type === "reservation") {
-      expect(artifact.venueName).toBe("WorkHub Cafe");
-      expect(artifact.title).toBe("已模拟预约");
-    }
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["reservation", "share"]);
+    expect(artifacts.find((artifact) => artifact.type === "reservation")?.venueName).toBe("WorkHub Cafe");
   });
 
-  it.each(
-    scenarioFixtures.map((fixture) => [fixture.id, fixture] as const),
-  )("scenario fixture %s builds a valid execution artifact", (_id, fixture) => {
-    const agent = runAgent(fixture.goal, fixture.wechat, fixture.seed);
-    const adjusted = applyTravelSettingsToPlan({
-      routePlan: agent.routePlan,
-      rankedPois: agent.rankedPois,
-      parseResult: agent.parseResult,
-      travelSettings: fixture.travelSettings,
-    });
+  it.each(scenarioFixtures.map((fixture) => [fixture.id, fixture] as const))(
+    "scenario fixture %s builds valid execution artifacts",
+    (_id, fixture) => {
+      const agent = runAgent(fixture.goal, fixture.wechat, fixture.seed);
+      const adjusted = applyTravelSettingsToPlan({
+        routePlan: agent.routePlan,
+        rankedPois: agent.rankedPois,
+        parseResult: agent.parseResult,
+        travelSettings: fixture.travelSettings,
+      });
 
-    const artifact = buildExecutionArtifacts({
-      selectedPlanType: "main",
-      selectedFallbackIndex: null,
-      currentPlanLabel: "主方案",
-      partySize: fixture.travelSettings.partySize,
-      shareText: "demo share",
-      planSummary: adjusted.settingImpactSummary ?? "demo summary",
-      receiptIds: {},
-      routePlan: adjusted.adjustedRoutePlan,
-      travelSettings: fixture.travelSettings,
-    });
+      const artifacts = buildExecutionArtifacts({
+        selectedPlanType: "main",
+        selectedFallbackIndex: null,
+        currentPlanLabel: "主方案",
+        partySize: fixture.travelSettings.partySize,
+        shareText: "demo share",
+        planSummary: adjusted.settingImpactSummary ?? "demo summary",
+        receiptIds: {},
+        routePlan: adjusted.adjustedRoutePlan,
+        travelSettings: fixture.travelSettings,
+      });
 
-    expect(["queue", "reservation", "voucher", "share"]).toContain(artifact.type);
-    expect(artifact.title.trim().length).toBeGreaterThan(0);
-    expect(JSON.stringify(artifact)).not.toMatch(/undefined|NaN/);
+      assertArtifactsValid(artifacts);
+      expect(artifacts.some((artifact) => artifact.type === "share")).toBe(true);
+    },
+  );
 
-    if (artifact.type === "share") {
-      expect(artifact.summary.trim().length).toBeGreaterThan(0);
-    } else {
-      expect(artifact.venueName.trim().length).toBeGreaterThan(0);
-    }
-  });
-
-  it("classifies golden scenarios without relying on a single fixture", () => {
+  it("classifies golden scenarios across multiple artifact types", () => {
     const expectations: Record<string, ExecutionArtifact["type"][]> = {
-      friendsEvening: ["queue"],
-      dateEvening: ["reservation", "queue"],
+      friendsEvening: ["queue", "reservation", "voucher"],
+      dateEvening: ["queue", "reservation"],
       familyWeekend: ["share", "voucher"],
       workAfternoon: ["reservation", "share"],
-      errandAfternoon: ["reservation", "queue"],
-      rushTaxi: ["reservation", "queue"],
+      errandAfternoon: ["queue", "reservation"],
+      rushTaxi: ["queue", "reservation"],
     };
+
+    const allTypes = new Set<ExecutionArtifact["type"]>();
 
     for (const fixture of scenarioFixtures) {
       const agent = runAgent(fixture.goal, fixture.wechat, fixture.seed);
@@ -357,7 +391,7 @@ describe("executionArtifacts", () => {
         parseResult: agent.parseResult,
         travelSettings: fixture.travelSettings,
       });
-      const artifact = buildExecutionArtifacts({
+      const artifacts = buildExecutionArtifacts({
         selectedPlanType: "main",
         selectedFallbackIndex: null,
         currentPlanLabel: "主方案",
@@ -368,13 +402,21 @@ describe("executionArtifacts", () => {
         travelSettings: fixture.travelSettings,
       });
 
+      const types = typesOf(artifacts);
+      for (const type of types) allTypes.add(type);
+
       const allowed = expectations[fixture.id];
       expect(allowed, fixture.id).toBeDefined();
-      expect(allowed).toContain(artifact.type);
+      expect(types.some((type) => allowed!.includes(type)), `${fixture.id}: ${types.join(",")}`).toBe(true);
+      expect(artifacts.some((artifact) => artifact.type === "share")).toBe(true);
 
       if (fixture.id === "workAfternoon") {
-        expect(artifact.type).not.toBe("voucher");
+        expect(types).not.toContain("voucher");
       }
     }
+
+    expect(allTypes.has("queue")).toBe(true);
+    expect(allTypes.has("reservation")).toBe(true);
+    expect(allTypes.has("share")).toBe(true);
   });
 });
