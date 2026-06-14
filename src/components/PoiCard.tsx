@@ -27,7 +27,10 @@ export function PoiCard({ poi, parseResult, selected, onSelect }: PoiCardProps) 
   const reasons = [personaReason, ...poi.reasons.filter((reason) => reason !== personaReason)];
 
   return (
-    <article className={`rounded-lg border bg-white p-4 shadow-sm transition ${selected ? "border-meituan-yellow ring-2 ring-meituan-yellow/40" : "border-black/8"}`}>
+    <article
+      data-testid="poi-card"
+      className={`rounded-lg border bg-white p-4 shadow-sm transition ${selected ? "border-meituan-yellow ring-2 ring-meituan-yellow/40" : "border-black/8"}`}
+    >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold">{poi.name}</h3>

@@ -237,6 +237,7 @@ export function ExecutionPanel({
 
           <button
             type="button"
+            data-testid="execution-start-button"
             className="mt-5 w-full rounded-lg bg-meituan-yellow px-4 py-3 text-sm font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!routePlan}
             onClick={handleExecute}
@@ -296,7 +297,7 @@ export function ExecutionPanel({
       ) : null}
 
       {executionStatus === "done" ? (
-        <div>
+        <div data-testid="execution-done">
           <div className="mt-4 flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-sm font-bold text-white">✓</span>
             <h2 className="text-lg font-extrabold text-meituan-ink">执行完成</h2>
@@ -333,6 +334,7 @@ export function ExecutionPanel({
       <div className="mt-4 rounded-xl border border-black/10 bg-meituan-gray/70">
         <button
           type="button"
+          data-testid="execution-trace-toggle"
           className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
           onClick={() => setTraceOpen((open) => !open)}
           aria-expanded={traceOpen}

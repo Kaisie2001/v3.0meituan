@@ -244,7 +244,10 @@ export function LeafletPlannerMap({
 
   if (isHero) {
     return (
-      <div className={`relative z-0 h-full w-full overflow-hidden bg-slate-100 ${className}`}>
+      <div
+        data-testid="map-container"
+        className={`relative z-0 h-full w-full overflow-hidden bg-slate-100 ${className}`}
+      >
         <div
           ref={hostRef}
           className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[2]"
@@ -266,7 +269,7 @@ export function LeafletPlannerMap({
   }
 
   return (
-    <section className={`rounded-lg border border-black/5 bg-white p-3 shadow-soft ${className}`}>
+    <section data-testid="map-container" className={`rounded-lg border border-black/5 bg-white p-3 shadow-soft ${className}`}>
       <div className="mb-3 flex flex-col gap-2">
         <div>
           <h2 className="text-base font-bold">动态规划地图</h2>

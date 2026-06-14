@@ -1,6 +1,10 @@
 .next/
 node_modules/
 out/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
 tsconfig.tsbuildinfo
 
 *.log

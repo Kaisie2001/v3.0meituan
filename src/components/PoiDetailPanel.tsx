@@ -10,7 +10,7 @@ type PoiDetailPanelProps = {
 
 export function PoiDetailPanel({ poi, onClose, onDislike }: PoiDetailPanelProps) {
   return (
-    <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
+    <section data-testid="selected-poi-detail" className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-lg font-bold">{poi.name}</h2>

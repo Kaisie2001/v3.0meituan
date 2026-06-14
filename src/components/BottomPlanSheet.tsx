@@ -302,7 +302,7 @@ function CompactGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) 
 
 function RouteThreeStepsBlock({ steps }: { steps: RouteStepPreview[] }) {
   return (
-    <div className="space-y-1">
+    <div data-testid="route-step-list" className="space-y-1">
       {steps.map((step, index) => (
         <div key={`${step.label}-${step.name}-${index}`} className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2.5 py-1.5">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-meituan-yellow/80 text-[10px] font-extrabold text-meituan-ink">
@@ -362,6 +362,7 @@ function MainTabContent({
             {summary.isFallback ? (
               <button
                 type="button"
+                data-testid="restore-main-plan-button"
                 onClick={onSelectMainPlan}
                 className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
               >
@@ -419,6 +420,7 @@ function MainTabContent({
         <div className="flex gap-2">
           <button
             type="button"
+            data-testid="confirm-execute-button"
             className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
             onClick={() => onConfirmExecute?.()}
           >
@@ -426,6 +428,7 @@ function MainTabContent({
           </button>
           <button
             type="button"
+            data-testid="view-fallback-button"
             className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62 hover:bg-black/5"
             onClick={summary.isFallback ? onSelectMainPlan : onViewFallback}
           >
@@ -463,7 +466,10 @@ function FallbackCard({
   const riskNotes = plan.slots.flatMap((slot) => slot.riskNotes);
 
   return (
-    <div className={`rounded-lg border p-3 ${isSelected ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-meituan-gray/60"}`}>
+    <div
+      data-testid="fallback-card"
+      className={`rounded-lg border p-3 ${isSelected ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-meituan-gray/60"}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-extrabold text-meituan-ink">{plan.title}</p>
         {isSelected ? (
@@ -534,6 +540,7 @@ function FallbackCard({
 
       <button
         type="button"
+        data-testid="select-fallback-button"
         onClick={onSelectPlan}
         disabled={isSelected}
         className="mt-3 w-full rounded-lg bg-meituan-yellow px-3 py-2 text-xs font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-default disabled:opacity-70"
@@ -609,8 +616,8 @@ function PoiTabContent({
   const topRisk = poi.risks[0];
 
   return (
-    <>
-      <div className="flex items-start justify-between gap-2">
+    <div data-testid="selected-poi-detail">
+      <div data-testid="poi-card" className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-extrabold text-meituan-ink">{poi.name}</h3>
           <p className="mt-1 text-sm font-extrabold text-meituan-ink">成行分 {poi.goabilityScore}</p>
@@ -689,7 +696,7 @@ function PoiTabContent({
           ) : null}
         </CollapseSection>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -791,7 +798,7 @@ export function BottomPlanSheet({
   }
 
   return (
-    <div className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden">
+    <div data-testid="plan-sheet" className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden">
       <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-black/12" aria-hidden="true" />
 
       <div className="flex shrink-0 gap-1 border-b border-black/6 px-3 pb-0 pt-1">
@@ -801,6 +808,9 @@ export function BottomPlanSheet({
             <button
               key={tab.id}
               type="button"
+              data-testid={
+                tab.id === "main" ? "main-plan-tab" : tab.id === "fallback" ? "fallback-plan-tab" : "poi-tab"
+              }
               onClick={() => onTabChange(tab.id)}
               className={`flex-1 rounded-t-lg px-2 py-2 text-xs font-bold transition ${
                 active ? "bg-meituan-yellow/20 text-meituan-ink" : "text-black/45 hover:text-black/65"

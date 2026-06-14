@@ -329,7 +329,7 @@ export default function Home() {
             ) : null}
 
             {screen === "result" ? (
-              <div className="relative h-full overflow-hidden bg-white">
+              <div data-testid="result-screen" className="relative h-full overflow-hidden bg-white">
                 <div className="absolute inset-0 z-0 pb-16 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
                   <LeafletPlannerMap
                     variant="hero"
@@ -412,7 +412,7 @@ export default function Home() {
             ) : null}
 
             {screen === "execute" ? (
-              <div className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
+              <div data-testid="execution-screen" className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
                 <ScreenBackButton label="返回方案" onClick={() => dispatchFlow({ type: "OPEN_RESULT" })} />
                 <ExecutionPanel
                   key={executionPanelKey}

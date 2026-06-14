@@ -4,6 +4,12 @@ import { useState } from "react";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/demoScenarios";
 import { defaultInputs } from "@/lib/parseIntent";
 
+const SCENARIO_CHIP_TEST_IDS: Partial<Record<DemoScenarioId, string>> = {
+  friends: "scenario-chip-friendsEvening",
+  errands: "scenario-chip-errandAfternoon",
+  work: "scenario-chip-workAfternoon",
+};
+
 type InputPanelProps = {
   goal: string;
   wechat: string;
@@ -70,6 +76,7 @@ export function InputPanel({
                 <button
                   key={scenario.id}
                   type="button"
+                  data-testid={SCENARIO_CHIP_TEST_IDS[scenario.id]}
                   className={`rounded-full border px-3 py-2 text-xs font-bold transition ${
                     active
                       ? "border-meituan-yellow bg-meituan-yellow/20 text-meituan-ink"
@@ -89,6 +96,7 @@ export function InputPanel({
         <label className="block">
           <span className="mb-2 block text-sm font-semibold text-black/75">你今天想怎么安排？</span>
           <textarea
+            data-testid="goal-input"
             className="h-28 w-full resize-none rounded-lg border border-black/10 bg-meituan-gray p-3 text-sm leading-6 outline-none transition focus:border-meituan-yellow focus:bg-white"
             value={goal}
             onChange={(event) => onGoalChange(event.target.value)}
@@ -98,6 +106,7 @@ export function InputPanel({
 
         <button
           type="button"
+          data-testid="travel-settings-button"
           onClick={onOpenTravelSettings}
           className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5 text-left transition hover:border-meituan-yellow/60 hover:bg-yellow-50/40"
         >
@@ -109,6 +118,7 @@ export function InputPanel({
         </button>
 
         <button
+          data-testid="run-agent-button"
           className="h-12 w-full rounded-lg bg-meituan-yellow px-6 text-sm font-bold text-meituan-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:justify-self-start"
           type="button"
           disabled={loading}

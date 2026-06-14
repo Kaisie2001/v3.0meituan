@@ -136,7 +136,7 @@ type BookingVoucherCardProps = {
 
 export function BookingVoucherCard({ voucher }: BookingVoucherCardProps) {
   return (
-    <div className="mt-4 overflow-hidden rounded-2xl border border-emerald-200/80 bg-white shadow-sm">
+    <div data-testid="booking-voucher" className="mt-4 overflow-hidden rounded-2xl border border-emerald-200/80 bg-white shadow-sm">
       <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 py-3">
         <div className="flex items-center gap-2">
           <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20 text-xs font-bold text-white">✓</span>
