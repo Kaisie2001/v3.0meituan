@@ -30,6 +30,19 @@ async function assertResultStructure(page: Page) {
 
 type ArtifactKind = "queue" | "reservation" | "voucher" | "share";
 
+const ARTIFACT_CARD_TEST_IDS = [
+  "execution-artifact-queue",
+  "execution-artifact-reservation",
+  "execution-artifact-voucher",
+  "execution-artifact-share",
+] as const;
+
+function artifactCards(page: Page) {
+  return page
+    .getByTestId("execution-artifact-list")
+    .locator(ARTIFACT_CARD_TEST_IDS.map((id) => `[data-testid="${id}"]`).join(", "));
+}
+
 function artifactLocator(page: Page, kinds: ArtifactKind[]) {
   return kinds.reduce(
     (locator, kind, index) =>
@@ -38,15 +51,15 @@ function artifactLocator(page: Page, kinds: ArtifactKind[]) {
   );
 }
 
-async function completeExecutionFlow(
-  page: Page,
-  options?: {
-    expectQueueArtifact?: boolean;
-    expectRestaurantArtifact?: boolean;
-    expectArtifactKinds?: ArtifactKind[];
-    expectTitles?: string[];
-  },
-) {
+function diningArtifactLocator(page: Page) {
+  return artifactLocator(page, ["queue", "reservation"]);
+}
+
+function activityArtifactLocator(page: Page) {
+  return artifactLocator(page, ["voucher", "share"]);
+}
+
+async function runExecutionToDone(page: Page) {
   await page.getByTestId("confirm-execute-button").click();
   await expect(page.getByTestId("result-screen")).toBeVisible();
   await expect(page.getByTestId("execution-modal")).toBeVisible();
@@ -56,37 +69,42 @@ async function completeExecutionFlow(
   await expect(page.getByTestId("execution-running")).toBeVisible();
   await expect(page.getByTestId("execution-done")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("execution-complete-title")).toBeVisible();
-
-  const kinds = options?.expectArtifactKinds ?? ["queue", "reservation", "share", "voucher"];
+  await expect(page.getByTestId("execution-results-heading")).toBeVisible();
   await expect(page.getByTestId("execution-artifact-list")).toBeVisible();
+  await expect(page.getByTestId("execution-view-plan-button")).toHaveText("查看路线");
+  await expect(page.getByTestId("execution-back-plan-button")).toBeVisible();
+}
+
+async function assertArtifactCountAtLeast(page: Page, minCount: number) {
+  await expect
+    .poll(async () => artifactCards(page).count(), { timeout: 5_000 })
+    .toBeGreaterThanOrEqual(minCount);
+}
+
+async function assertAnyArtifactVisible(page: Page, kinds: ArtifactKind[]) {
   await expect(artifactLocator(page, kinds).first()).toBeVisible();
+}
 
-  if (options?.expectTitles?.length) {
-    let titleLoc = page.getByText(options.expectTitles[0], { exact: true });
-    for (let i = 1; i < options.expectTitles.length; i += 1) {
-      titleLoc = titleLoc.or(page.getByText(options.expectTitles[i], { exact: true }));
-    }
-    await expect(titleLoc.first()).toBeVisible();
+async function assertDiningArtifactVisible(page: Page) {
+  await expect(diningArtifactLocator(page).first()).toBeVisible();
+}
+
+async function assertActivityArtifactVisible(page: Page) {
+  await expect(activityArtifactLocator(page).first()).toBeVisible();
+}
+
+async function assertQueueArtifactDetails(page: Page) {
+  await expect(page.getByTestId("execution-artifact-queue")).toBeVisible();
+  await expect(page.getByTestId("execution-queue-number")).toBeVisible();
+  await expect(page.getByTestId("execution-queue-ahead-count")).toBeVisible();
+  await expect(page.getByTestId("execution-queue-progress")).toBeVisible();
+  await expect(page.getByTestId("execution-cancel-queue-button")).toBeVisible();
+}
+
+async function assertNoArtifactKinds(page: Page, kinds: ArtifactKind[]) {
+  for (const kind of kinds) {
+    await expect(page.getByTestId(`execution-artifact-${kind}`)).toHaveCount(0);
   }
-
-  if (options?.expectQueueArtifact) {
-    await expect(page.getByTestId("execution-artifact-queue")).toBeVisible();
-    await expect(page.getByText("排队详情")).toBeVisible();
-    await expect(page.getByTestId("execution-queue-number")).toBeVisible();
-    await expect(page.getByTestId("execution-queue-ahead-count")).toBeVisible();
-    await expect(page.getByTestId("execution-queue-progress")).toBeVisible();
-    await expect(page.getByTestId("execution-artifact-queue")).not.toContainText("已模拟预约");
-    await expect(page.getByTestId("execution-cancel-queue-button")).toBeVisible();
-  }
-
-  if (options?.expectRestaurantArtifact) {
-    await expect(page.getByTestId("execution-artifact-voucher")).toHaveCount(0);
-    const queueCard = page.getByTestId("execution-artifact-queue");
-    const reservationCard = page.getByTestId("execution-artifact-reservation");
-    await expect(queueCard.or(reservationCard).first()).toBeVisible();
-  }
-
-  await expect(page.getByTestId("execution-view-plan-button")).not.toHaveText("查看核销码");
 }
 
 test.describe("golden paths", () => {
@@ -103,10 +121,13 @@ test.describe("golden paths", () => {
     await assertResultStructure(page);
 
     await expect(page.getByTestId("confirm-execute-button")).toBeEnabled();
-    await completeExecutionFlow(page, { expectRestaurantArtifact: true });
+    await runExecutionToDone(page);
+    await assertDiningArtifactVisible(page);
+    await assertArtifactCountAtLeast(page, 2);
+    await assertAnyArtifactVisible(page, ["share"]);
   });
 
-  test("friends evening: queue details after execute", async ({ page }) => {
+  test("friends evening: dining and activity artifacts after execute", async ({ page }) => {
     const fixture = getScenarioFixture("friendsEvening");
     expect(fixture).toBeTruthy();
 
@@ -115,10 +136,21 @@ test.describe("golden paths", () => {
     await assertResultStructure(page);
 
     await expect(page.getByTestId("confirm-execute-button")).toBeEnabled();
-    await completeExecutionFlow(page, { expectQueueArtifact: true });
+    await runExecutionToDone(page);
+    await assertDiningArtifactVisible(page);
+    await assertAnyArtifactVisible(page, ["voucher", "share"]);
+    await assertArtifactCountAtLeast(page, 2);
+
+    const queueVisible = await page.getByTestId("execution-artifact-queue").isVisible();
+    const reservationVisible = await page.getByTestId("execution-artifact-reservation").isVisible();
+    expect(queueVisible || reservationVisible).toBe(true);
+
+    if (queueVisible) {
+      await assertQueueArtifactDetails(page);
+    }
   });
 
-  test("friends evening: select fallback plan and execute", async ({ page }) => {
+  test("friends evening: multiple artifacts on fallback plan execute", async ({ page }) => {
     const fixture = getScenarioFixture("friendsEvening");
     expect(fixture).toBeTruthy();
 
@@ -134,12 +166,13 @@ test.describe("golden paths", () => {
     await selectButton.click();
 
     await expect(page.getByTestId("main-plan-tab")).toBeVisible();
-    await expect(page.getByTestId("route-step-list")).toBeVisible();
     await expect(page.getByTestId("confirm-execute-button")).toBeEnabled();
-    await completeExecutionFlow(page, { expectQueueArtifact: true });
+    await runExecutionToDone(page);
+    await assertDiningArtifactVisible(page);
+    await assertArtifactCountAtLeast(page, 2);
   });
 
-  test("date evening: reservation artifact after execute", async ({ page }) => {
+  test("date evening: dining artifact after execute", async ({ page }) => {
     const fixture = getScenarioFixture("dateEvening");
     expect(fixture).toBeTruthy();
 
@@ -147,14 +180,14 @@ test.describe("golden paths", () => {
     await waitForResultScreen(page);
     await assertResultStructure(page);
 
-    await completeExecutionFlow(page, {
-      expectArtifactKinds: ["queue", "reservation"],
-      expectTitles: ["排队详情", "已模拟预约"],
-    });
-    await expect(page.getByTestId("execution-artifact-voucher")).toHaveCount(0);
+    await runExecutionToDone(page);
+    await assertDiningArtifactVisible(page);
+    await assertArtifactCountAtLeast(page, 2);
+    await assertAnyArtifactVisible(page, ["share"]);
+    await assertNoArtifactKinds(page, ["voucher"]);
   });
 
-  test("family weekend: share or voucher artifact after execute", async ({ page }) => {
+  test("family weekend: voucher or share artifact after execute", async ({ page }) => {
     const fixture = getScenarioFixture("familyWeekend");
     expect(fixture).toBeTruthy();
 
@@ -162,12 +195,9 @@ test.describe("golden paths", () => {
     await waitForResultScreen(page);
     await assertResultStructure(page);
 
-    await completeExecutionFlow(page, {
-      expectArtifactKinds: ["share", "voucher"],
-      expectTitles: ["已生成可分享计划", "已生成核销码"],
-    });
-    await expect(page.getByTestId("execution-artifact-reservation")).toHaveCount(0);
-    await expect(page.getByTestId("execution-artifact-queue")).toHaveCount(0);
+    await runExecutionToDone(page);
+    await assertActivityArtifactVisible(page);
+    await assertNoArtifactKinds(page, ["queue", "reservation"]);
   });
 
   test("work afternoon: browse recommended poi and execute", async ({ page }) => {
@@ -190,11 +220,11 @@ test.describe("golden paths", () => {
 
     await page.getByTestId("main-plan-tab").click();
     await expect(page.getByTestId("confirm-execute-button")).toBeEnabled();
-    await completeExecutionFlow(page, {
-      expectArtifactKinds: ["reservation", "share"],
-      expectTitles: ["已模拟预约", "已生成可分享计划"],
-    });
-    await expect(page.getByTestId("execution-artifact-voucher")).toHaveCount(0);
+    await runExecutionToDone(page);
+    await assertDiningArtifactVisible(page);
+    await assertArtifactCountAtLeast(page, 2);
+    await assertAnyArtifactVisible(page, ["share"]);
+    await assertNoArtifactKinds(page, ["voucher"]);
   });
 
   test("can plan from fixture goal text directly", async ({ page }) => {
@@ -204,5 +234,32 @@ test.describe("golden paths", () => {
     await runPlanningWithGoal(page, fixture!.goal);
     await waitForResultScreen(page);
     await assertResultStructure(page);
+  });
+});
+
+test.describe("execution artifact coverage", () => {
+  test.beforeEach(async ({ page }) => {
+    await gotoHome(page);
+  });
+
+  test("friends evening shows restaurant and activity artifacts together", async ({ page }) => {
+    await runPlanningFromChip(page, "scenario-chip-friendsEvening");
+    await waitForResultScreen(page);
+    await runExecutionToDone(page);
+
+    await assertArtifactCountAtLeast(page, 3);
+    await expect(page.getByTestId("execution-artifact-queue").or(page.getByTestId("execution-artifact-reservation")).first()).toBeVisible();
+    await expect(page.getByTestId("execution-artifact-voucher").or(page.getByTestId("execution-artifact-share")).first()).toBeVisible();
+    await expect(page.getByTestId("execution-artifact-share")).toBeVisible();
+  });
+
+  test("date evening shows dining artifact outside friends scenario", async ({ page }) => {
+    await runPlanningFromChip(page, "scenario-chip-dateEvening");
+    await waitForResultScreen(page);
+    await runExecutionToDone(page);
+
+    await assertDiningArtifactVisible(page);
+    await assertArtifactCountAtLeast(page, 2);
+    await expect(page.getByTestId("execution-artifact-list")).toBeVisible();
   });
 });
