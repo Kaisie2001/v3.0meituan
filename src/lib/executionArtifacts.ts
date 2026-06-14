@@ -1,5 +1,4 @@
 import { buildQrSeed } from "./qrSeed";
-import { getDateLabel } from "./preferenceSummary";
 import type { RoutePriorityChoice, TravelSettings } from "./preferenceSummary";
 import type {
   ExecutionCapability,
@@ -46,13 +45,15 @@ export type ScheduledQueueExecutionArtifact = ArtifactBase & {
   note: string;
 };
 
-export type ReservationExecutionArtifact = ArtifactBase & {
-  type: "reservation";
-  title: "已模拟预约";
+export type ScheduledReservationExecutionArtifact = ArtifactBase & {
+  type: "scheduledReservation";
+  title: "已设置自动预约";
   venueName: string;
-  timeLabel: string;
+  plannedArrivalTime: string;
+  scheduledBookingTime: string;
   partySize: number;
-  status: string;
+  triggerReason: string;
+  statusSteps: QueueStatusStep[];
   note: string;
 };
 
@@ -73,12 +74,21 @@ export type ShareExecutionArtifact = ArtifactBase & {
   note: string;
 };
 
+export type NoBookingNeededExecutionArtifact = ArtifactBase & {
+  type: "noBookingNeeded";
+  title: "无需预约，已生成计划";
+  summary: string;
+  shareText: string;
+  note: string;
+};
+
 export type ExecutionArtifact =
   | QueueExecutionArtifact
   | ScheduledQueueExecutionArtifact
-  | ReservationExecutionArtifact
+  | ScheduledReservationExecutionArtifact
   | VoucherExecutionArtifact
-  | ShareExecutionArtifact;
+  | ShareExecutionArtifact
+  | NoBookingNeededExecutionArtifact;
 
 /**
  * Phase 1 bundle: full artifact list with primary fields copied onto the array
@@ -105,12 +115,14 @@ const VOUCHER_SIGNALS = [
 ];
 
 const QUEUE_DINING_SIGNALS = [/排队/, /等位/, /高峰/, /热门/];
+const ADVANCE_BOOKING_SIGNALS = [/约会/, /氛围/, /可订位/, /订位/, /包间/, /提前/];
 
 const PRIMARY_TYPE_ORDER: ExecutionArtifact["type"][] = [
   "scheduledQueue",
+  "scheduledReservation",
   "queue",
-  "reservation",
   "voucher",
+  "noBookingNeeded",
   "share",
 ];
 
@@ -323,6 +335,31 @@ function shouldGenerateVoucher(poi: ScoredPoi) {
   return supportsCapability(poi, "voucher") || isVoucherPoi(poi) || poi.requiresVoucher === true;
 }
 
+function hasAdvanceBookingSignals(poi: ScoredPoi) {
+  const blob = poiSignalBlob(poi);
+  return ADVANCE_BOOKING_SIGNALS.some((pattern) => pattern.test(blob));
+}
+
+function shouldGenerateScheduledReservation(poi: ScoredPoi, routePriority: RoutePriorityChoice) {
+  if (!supportsCapability(poi, "reservation")) return false;
+  if (shouldGenerateQueue(poi, routePriority)) return false;
+  if (routePriority === "experience") return true;
+  if (hasAdvanceBookingSignals(poi)) return true;
+  if (poi.preferredExecution === "reservation") return true;
+  if (poi.category === "cafe" && poi.reservationAvailable) return true;
+  return false;
+}
+
+function canWalkInWithoutBooking(poi: ScoredPoi, routePriority: RoutePriorityChoice) {
+  const blob = poiSignalBlob(poi);
+  const queueMinutes = safeQueueMinutes(poi.queueMinutes);
+  if (poi.category === "cafe" && /办公|插座|外带|非网红/.test(blob)) return true;
+  if (queueMinutes <= 5 && routePriority === "time" && !hasAdvanceBookingSignals(poi)) return true;
+  if (!poi.reservationAvailable && queueMinutes <= 8 && !hasAdvanceBookingSignals(poi)) return true;
+  if (poi.preferredExecution === "share") return true;
+  return false;
+}
+
 function resolvePreferredDiningArtifact(
   poi: ScoredPoi,
   routePriority: RoutePriorityChoice,
@@ -331,12 +368,10 @@ function resolvePreferredDiningArtifact(
   slotIndex: number,
   travelSettings: TravelSettings,
   seed: string,
-): "queue" | "scheduledQueue" | "reservation" | null {
-  if (poi.category === "cafe") {
-    return supportsCapability(poi, "reservation") ? "reservation" : null;
-  }
+): "queue" | "scheduledQueue" | "scheduledReservation" | null {
+  if (canWalkInWithoutBooking(poi, routePriority)) return null;
 
-  if (poi.category === "restaurant") {
+  if (poi.category === "restaurant" || poi.category === "cafe") {
     if (shouldGenerateQueue(poi, routePriority)) {
       if (
         shouldScheduleQueueInsteadOfImmediate({
@@ -350,7 +385,7 @@ function resolvePreferredDiningArtifact(
       }
       return "queue";
     }
-    if (supportsCapability(poi, "reservation")) return "reservation";
+    if (shouldGenerateScheduledReservation(poi, routePriority)) return "scheduledReservation";
     if (supportsCapability(poi, "queue")) {
       if (
         shouldScheduleQueueInsteadOfImmediate({
@@ -379,12 +414,6 @@ function selectPrimaryExecutionArtifact(artifacts: ExecutionArtifact[]) {
 
 function buildArtifactId(poiId: string, type: ExecutionArtifact["type"], slotIndex: number) {
   return `${poiId}-${type}-${slotIndex}`;
-}
-
-function formatTimeLabel(travelSettings: TravelSettings) {
-  const dateLabel = getDateLabel(travelSettings.date);
-  const time = travelSettings.startTime?.trim() || "14:00";
-  return `${dateLabel} ${time}`;
 }
 
 function stableMockCode(seed: string) {
@@ -459,6 +488,51 @@ function buildScheduledQueueArtifact(params: {
   };
 }
 
+function resolveBookingLeadMinutes(poi: ScoredPoi, seed: string) {
+  const routeEta = safeQueueMinutes(poi.routeEtaMinutes, 12);
+  const jitter = stablePick(seed, 12, 20, 50);
+  return Math.max(30, Math.min(90, routeEta + jitter));
+}
+
+function buildScheduledReservationArtifact(params: {
+  id: string;
+  poi: ScoredPoi;
+  seed: string;
+  slot: RouteSlot;
+  slots: RouteSlot[];
+  slotIndex: number;
+  travelSettings: TravelSettings;
+  partySize: number;
+}): ScheduledReservationExecutionArtifact {
+  const plannedArrivalTime = resolvePlannedArrivalTime({
+    slot: params.slot,
+    slots: params.slots,
+    slotIndex: params.slotIndex,
+    travelSettings: params.travelSettings,
+  });
+  const leadMinutes = resolveBookingLeadMinutes(params.poi, params.seed);
+  const plannedArrivalMinutes = parseTimeToMinutes(plannedArrivalTime) ?? 18 * 60 + 30;
+  const scheduledBookingTime = formatMinutesToTime(plannedArrivalMinutes - leadMinutes);
+
+  return {
+    id: params.id,
+    type: "scheduledReservation",
+    title: "已设置自动预约",
+    venueName: safeName(params.poi.name, "餐厅"),
+    plannedArrivalTime,
+    scheduledBookingTime,
+    partySize: safePartySize(params.partySize, params.travelSettings.partySize),
+    triggerReason: `到店前约 ${leadMinutes} 分钟，且当前时段建议提前订位`,
+    statusSteps: [
+      { label: "已设置", state: "done" },
+      { label: "等待提交", state: "active" },
+      { label: "商家确认", state: "pending" },
+      { label: "到店", state: "pending" },
+    ],
+    note: "到点后 Agent 将模拟提交预约请求；真实产品可接入美团/点评预订服务。",
+  };
+}
+
 function buildQueueArtifact(params: {
   id: string;
   poi: ScoredPoi;
@@ -495,25 +569,6 @@ function buildQueueArtifact(params: {
   };
 }
 
-function buildReservationArtifact(params: {
-  id: string;
-  poi: ScoredPoi;
-  travelSettings: TravelSettings;
-  partySize: number;
-  seed: string;
-}): ReservationExecutionArtifact {
-  return {
-    id: params.id,
-    type: "reservation",
-    title: "已模拟预约",
-    venueName: safeName(params.poi.name, "餐厅"),
-    timeLabel: formatTimeLabel(params.travelSettings),
-    partySize: safePartySize(params.partySize, params.travelSettings.partySize),
-    status: params.poi.reservationAvailable ? "待商家确认" : "已提交预约请求",
-    note: "商家确认后会同步到消息中心，建议出发前再次确认。",
-  };
-}
-
 function buildVoucherArtifact(params: {
   id: string;
   poi: ScoredPoi;
@@ -539,6 +594,21 @@ function buildVoucherArtifact(params: {
     code: ticketId,
     qrPayload,
     note: "到店/入场前出示二维码核销。",
+  };
+}
+
+function buildNoBookingNeededArtifact(params: {
+  id: string;
+  summary: string;
+  shareText: string;
+}): NoBookingNeededExecutionArtifact {
+  return {
+    id: params.id,
+    type: "noBookingNeeded",
+    title: "无需预约，已生成计划",
+    summary: params.summary,
+    shareText: params.shareText.trim() || "已为你整理好行程，出发前可再次确认节点顺序。",
+    note: "当前节点无需预约或取号，可直接按路线出发。",
   };
 }
 
@@ -621,13 +691,16 @@ function buildSlotArtifact(params: {
     });
   }
 
-  if (diningType === "reservation") {
-    return buildReservationArtifact({
-      id: buildArtifactId(poi.id, "reservation", params.slotIndex),
+  if (diningType === "scheduledReservation") {
+    return buildScheduledReservationArtifact({
+      id: buildArtifactId(poi.id, "scheduledReservation", params.slotIndex),
       poi,
+      seed: slotSeed,
+      slot: params.slot,
+      slots: params.slots,
+      slotIndex: params.slotIndex,
       travelSettings: params.travelSettings,
       partySize: params.partySize,
-      seed: slotSeed,
     });
   }
 
@@ -680,7 +753,13 @@ function buildExecutionArtifactList(params: {
   });
 
   if (nodeArtifacts.length === 0) {
-    return [shareArtifact];
+    return [
+      buildNoBookingNeededArtifact({
+        id: `${params.currentPlanLabel}-no-booking`,
+        summary: params.planSummary || "已按当前方案生成可执行行程。",
+        shareText: params.shareText,
+      }),
+    ];
   }
 
   return [...nodeArtifacts, shareArtifact];
@@ -692,7 +771,12 @@ function bundleExecutionArtifacts(artifacts: ExecutionArtifact[]): ExecutionArti
 }
 
 export function getExecutionArtifactPrimaryActionLabel(type: ExecutionArtifact["type"]) {
-  if (type === "queue" || type === "scheduledQueue" || type === "reservation" || type === "voucher") {
+  if (
+    type === "queue" ||
+    type === "scheduledQueue" ||
+    type === "scheduledReservation" ||
+    type === "voucher"
+  ) {
     return "查看路线";
   }
   return "查看最终行程";
@@ -723,6 +807,8 @@ export const executionArtifactRules = {
   deriveBookingStatus,
   deriveExecutionCapabilities,
   shouldGenerateQueue,
+  shouldGenerateScheduledReservation,
+  canWalkInWithoutBooking,
   shouldGenerateVoucher,
   shouldScheduleQueueInsteadOfImmediate,
   resolvePlannedArrivalTime,

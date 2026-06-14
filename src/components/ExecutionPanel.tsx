@@ -51,10 +51,11 @@ const DEMO_EXECUTION_NOTE =
 
 const ARTIFACT_DISPLAY_ORDER: Record<ExecutionArtifact["type"], number> = {
   scheduledQueue: 0,
-  queue: 1,
-  voucher: 2,
-  reservation: 3,
-  share: 4,
+  scheduledReservation: 1,
+  queue: 2,
+  voucher: 3,
+  noBookingNeeded: 4,
+  share: 5,
 };
 
 function sortArtifactsForDisplay(artifacts: ExecutionArtifact[]) {
