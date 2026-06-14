@@ -226,18 +226,18 @@ export function LeafletPlannerMap({
   }, [variant, className]);
 
   const legend = (
-    <div className={`flex flex-wrap gap-x-3 gap-y-1 text-black/60 ${isHero ? "text-[10px]" : "text-xs"}`}>
+    <div className={`flex flex-wrap gap-x-3 gap-y-1 text-black/55 ${isHero ? "text-[10px]" : "text-xs"}`}>
       <span className="inline-flex items-center gap-1">
         <i className="inline-block h-0.5 w-4 rounded-full" style={{ background: ROUTE_COLOR }} />
-        当前路线
+        推荐路线
       </span>
       <span className="inline-flex items-center gap-1">
         <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ROUTE_COLOR }} />
-        推荐点
+        途经点
       </span>
       <span className="inline-flex items-center gap-1">
         <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ALTERNATE_COLOR }} />
-        备选点
+        可替换
       </span>
     </div>
   );
@@ -252,9 +252,9 @@ export function LeafletPlannerMap({
           ref={hostRef}
           className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[2]"
         />
-        <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-lg bg-white/92 px-2 py-1.5 shadow-sm backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-xl bg-white/95 px-2.5 py-2 shadow-md backdrop-blur-sm">
           {legend}
-          {mapHint ? <p className="mt-1 max-w-[220px] text-[9px] leading-4 text-black/45">{mapHint}</p> : null}
+          {mapHint ? <p className="mt-1 max-w-[240px] text-[10px] leading-4 text-black/50">{mapHint}</p> : null}
         </div>
         {tileFailed ? (
           <div className="absolute inset-0 z-[4] grid place-items-center bg-slate-50 text-center">

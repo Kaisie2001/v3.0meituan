@@ -93,9 +93,9 @@ export function ClarifyModal({ open, missingFields, draft, onClose, onSubmit }: 
 
         <div className="shrink-0 px-4 pb-2 pt-3">
           <h2 id="clarify-modal-title" className="text-base font-extrabold text-meituan-ink">
-            补全关键信息
+            再确认几个细节
           </h2>
-          <p className="mt-1 text-sm leading-5 text-black/60">为了生成可执行方案，需要你确认几个关键信息。</p>
+          <p className="mt-1 text-sm leading-5 text-black/55">补全后就能生成更合适的路线。</p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">

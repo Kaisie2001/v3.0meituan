@@ -10,6 +10,14 @@ const SCENARIO_CHIP_TEST_IDS: Partial<Record<DemoScenarioId, string>> = {
   work: "scenario-chip-workAfternoon",
 };
 
+const SCENARIO_SHORTCUTS: Record<DemoScenarioId, { emoji: string; hint: string }> = {
+  friends: { emoji: "🍻", hint: "晚饭 + 续摊" },
+  family: { emoji: "👨‍👩‍👧", hint: "亲子 · 少折腾" },
+  date: { emoji: "💛", hint: "氛围 · 散步" },
+  work: { emoji: "☕", hint: "安静 · 久坐" },
+  errands: { emoji: "📍", hint: "顺路 · 少折返" },
+};
+
 type InputPanelProps = {
   goal: string;
   wechat: string;
@@ -47,60 +55,33 @@ export function InputPanel({
   const hasSeed = seed.trim().length > 0;
 
   return (
-    <section className="rounded-lg border border-black/5 bg-white p-4 shadow-soft">
-      <div className="mb-4">
+    <section className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-soft">
+      <div className="bg-gradient-to-br from-meituan-yellow/25 via-white to-white px-4 pb-4 pt-5">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-black/55">GoMap Agent</p>
-            <h1 className="text-2xl font-bold tracking-normal text-meituan-ink">美团成行地图</h1>
-            <p className="mt-2 text-base font-semibold text-black/70">一句话，让 AI 帮你安排本地短时活动</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-black/40">美团 · 本地生活</p>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-meituan-ink">成行地图</h1>
+            <p className="mt-1.5 text-sm leading-5 text-black/55">说出你想怎么过这几小时，帮你排好路线</p>
           </div>
           <button
             type="button"
             onClick={onResetDemo}
-            className="shrink-0 rounded-full border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/50 transition hover:border-black/20 hover:text-black/70"
+            className="shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold text-black/40 transition hover:text-black/60"
           >
-            重置演示
+            清空
           </button>
-        </div>
-        <p className="mt-2 rounded-lg bg-yellow-50 px-3 py-2 text-xs font-semibold leading-5 text-black/58">
-          试试：选择下方演示场景，再点击「一键 AI 规划」查看不同本地生活方案。
-        </p>
-
-        <div className="mt-4">
-          <p className="mb-2 text-xs font-bold text-black/45">试试这些场景</p>
-          <div className="flex flex-wrap gap-2">
-            {DEMO_SCENARIOS.map((scenario) => {
-              const active = activeDemoScenarioId === scenario.id;
-              return (
-                <button
-                  key={scenario.id}
-                  type="button"
-                  data-testid={SCENARIO_CHIP_TEST_IDS[scenario.id]}
-                  className={`rounded-full border px-3 py-2 text-xs font-bold transition ${
-                    active
-                      ? "border-meituan-yellow bg-meituan-yellow/20 text-meituan-ink"
-                      : "border-black/8 bg-meituan-gray text-black/68 hover:border-meituan-yellow hover:bg-yellow-50"
-                  }`}
-                  onClick={() => onSelectDemoScenario(scenario.id)}
-                >
-                  {scenario.label}
-                </button>
-              );
-            })}
-          </div>
         </div>
       </div>
 
-      <div className="grid gap-3">
+      <div className="space-y-4 px-4 pb-4">
         <label className="block">
-          <span className="mb-2 block text-sm font-semibold text-black/75">你今天想怎么安排？</span>
+          <span className="mb-2 block text-sm font-extrabold text-meituan-ink">你想怎么安排？</span>
           <textarea
             data-testid="goal-input"
-            className="h-28 w-full resize-none rounded-lg border border-black/10 bg-meituan-gray p-3 text-sm leading-6 outline-none transition focus:border-meituan-yellow focus:bg-white"
+            className="h-32 w-full resize-none rounded-2xl border border-black/8 bg-meituan-gray/80 p-3.5 text-[15px] leading-7 text-meituan-ink outline-none transition placeholder:text-black/35 focus:border-meituan-yellow focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,195,0,0.25)]"
             value={goal}
             onChange={(event) => onGoalChange(event.target.value)}
-            placeholder="比如：想找个地方轻松待一下，晚点和朋友吃饭"
+            placeholder="例如：晚上和朋友吃饭，吃完还想找地方聊聊天"
           />
         </label>
 
@@ -108,82 +89,100 @@ export function InputPanel({
           type="button"
           data-testid="travel-settings-button"
           onClick={onOpenTravelSettings}
-          className="flex w-full items-center justify-between gap-3 rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5 text-left transition hover:border-meituan-yellow/60 hover:bg-yellow-50/40"
+          className="flex w-full items-center gap-3 rounded-2xl border border-black/6 bg-white px-3.5 py-3 text-left shadow-sm transition hover:border-meituan-yellow/50"
         >
-          <span className="min-w-0">
-            <span className="block text-xs font-bold text-black/45">出行设置</span>
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-meituan-yellow/20 text-base">🕐</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[11px] font-bold text-black/45">出行偏好</span>
             <span className="mt-0.5 block truncate text-sm font-extrabold text-meituan-ink">{travelSettingsSummary}</span>
           </span>
-          <span className="shrink-0 text-xs font-bold text-meituan-ink">修改</span>
+          <span className="shrink-0 text-xs font-bold text-meituan-ink">调整</span>
         </button>
 
         <button
           data-testid="run-agent-button"
-          className="h-12 w-full rounded-lg bg-meituan-yellow px-6 text-sm font-bold text-meituan-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:justify-self-start"
+          className="h-12 w-full rounded-2xl bg-meituan-yellow px-6 text-[15px] font-extrabold text-meituan-ink shadow-md transition hover:brightness-95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
           type="button"
           disabled={loading}
           onClick={() => onGenerate?.()}
         >
-          {loading ? "规划中..." : "一键 AI 规划"}
+          {loading ? "正在为你排路线…" : "开始规划"}
         </button>
+
+        <div>
+          <p className="mb-2 text-[11px] font-bold text-black/40">快捷入口</p>
+          <div className="grid grid-cols-2 gap-2">
+            {DEMO_SCENARIOS.map((scenario) => {
+              const active = activeDemoScenarioId === scenario.id;
+              const shortcut = SCENARIO_SHORTCUTS[scenario.id];
+              return (
+                <button
+                  key={scenario.id}
+                  type="button"
+                  data-testid={SCENARIO_CHIP_TEST_IDS[scenario.id]}
+                  className={`flex items-start gap-2.5 rounded-2xl border px-3 py-2.5 text-left transition ${
+                    active
+                      ? "border-meituan-yellow bg-meituan-yellow/15 shadow-sm"
+                      : "border-black/6 bg-meituan-gray/50 hover:border-meituan-yellow/40 hover:bg-white"
+                  }`}
+                  onClick={() => onSelectDemoScenario(scenario.id)}
+                >
+                  <span className="text-lg leading-none">{shortcut.emoji}</span>
+                  <span className="min-w-0">
+                    <span className="block text-xs font-extrabold text-meituan-ink">{scenario.label}</span>
+                    <span className="mt-0.5 block truncate text-[10px] font-semibold text-black/45">{shortcut.hint}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
-      <div className="mt-4 space-y-3">
-        <div className="rounded-lg border border-black/8 bg-meituan-gray/60">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-            onClick={() => setWechatOpen((open) => !open)}
-            aria-expanded={wechatOpen}
-          >
-            <span>
-              <span className="block text-sm font-extrabold text-black/78">添加朋友/家人要求</span>
-              <span className="mt-1 block text-xs leading-5 text-black/50">例如不吃辣、别太远、预算、人群偏好等</span>
-              {hasWechat ? <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已添加朋友要求</span> : null}
-            </span>
-            <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-black/60 shadow-sm">
-              {wechatOpen ? "收起" : "+ 展开"}
-            </span>
-          </button>
-          {wechatOpen ? (
-            <div className="px-4 pb-4">
-              <textarea
-                className="h-28 w-full resize-none rounded-lg border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
-                value={wechat}
-                onChange={(event) => onWechatChange(event.target.value)}
-                placeholder={defaultInputs.wechat}
-              />
-            </div>
-          ) : null}
-        </div>
+      <div className="space-y-2 border-t border-black/5 bg-meituan-gray/30 px-4 py-3">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left"
+          onClick={() => setWechatOpen((open) => !open)}
+          aria-expanded={wechatOpen}
+        >
+          <span>
+            <span className="block text-sm font-bold text-black/75">同行人要求</span>
+            <span className="mt-0.5 block text-[11px] text-black/45">口味、预算、人群偏好</span>
+            {hasWechat ? <span className="mt-1 inline-block text-[11px] font-bold text-emerald-700">已补充</span> : null}
+          </span>
+          <span className="shrink-0 text-xs font-bold text-black/45">{wechatOpen ? "收起" : "添加"}</span>
+        </button>
+        {wechatOpen ? (
+          <textarea
+            className="h-24 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
+            value={wechat}
+            onChange={(event) => onWechatChange(event.target.value)}
+            placeholder={defaultInputs.wechat}
+          />
+        ) : null}
 
-        <div className="rounded-lg border border-black/8 bg-meituan-gray/60">
-          <button
-            type="button"
-            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-            onClick={() => setSeedOpen((open) => !open)}
-            aria-expanded={seedOpen}
-          >
-            <span>
-              <span className="block text-sm font-extrabold text-black/78">添加种草地点/收藏内容</span>
-              <span className="mt-1 block text-xs leading-5 text-black/50">例如收藏的店、想去清单、朋友推荐地点等</span>
-              {hasSeed ? <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已添加种草内容</span> : null}
-            </span>
-            <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-black/60 shadow-sm">
-              {seedOpen ? "收起" : "+ 展开"}
-            </span>
-          </button>
-          {seedOpen ? (
-            <div className="px-4 pb-4">
-              <textarea
-                className="h-28 w-full resize-none rounded-lg border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
-                value={seed}
-                onChange={(event) => onSeedChange(event.target.value)}
-                placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
-              />
-            </div>
-          ) : null}
-        </div>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left"
+          onClick={() => setSeedOpen((open) => !open)}
+          aria-expanded={seedOpen}
+        >
+          <span>
+            <span className="block text-sm font-bold text-black/75">种草 / 收藏</span>
+            <span className="mt-0.5 block text-[11px] text-black/45">想去的店、清单、朋友推荐</span>
+            {hasSeed ? <span className="mt-1 inline-block text-[11px] font-bold text-emerald-700">已补充</span> : null}
+          </span>
+          <span className="shrink-0 text-xs font-bold text-black/45">{seedOpen ? "收起" : "添加"}</span>
+        </button>
+        {seedOpen ? (
+          <textarea
+            className="h-24 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
+            value={seed}
+            onChange={(event) => onSeedChange(event.target.value)}
+            placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
+          />
+        ) : null}
       </div>
     </section>
   );

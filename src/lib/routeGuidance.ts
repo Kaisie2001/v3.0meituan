@@ -3,7 +3,7 @@ import type { TravelSettings } from "./preferenceSummary";
 import { TRANSPORT_MODE_LABELS } from "./preferenceSummary";
 import { buildTravelSettingEffects } from "./travelSettingEffects";
 
-export const MAP_DEMO_NOTE = "地图路线为 demo 示意，实际导航可接入美团/地图路径服务。";
+export const MAP_DEMO_NOTE = "路线为示意，出发前可在美团查看真实导航。";
 
 export const FALLBACK_GUIDANCE_NOTE = "已按备选方案重新组织转场顺序。";
 

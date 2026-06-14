@@ -313,11 +313,25 @@ function routePriorityToRoutePrefs(priority: RoutePriorityChoice): Pick<RoutePre
 }
 
 export function buildTravelSettingsSummary(settings: TravelSettings) {
+  const transportShort: Record<string, string> = {
+    transit: "地铁公交",
+    walking: "步行",
+    driving: "打车",
+    auto: "智能推荐",
+  };
+  const priorityShort: Record<string, string> = {
+    time: "省时",
+    distance: "少走路",
+    cost: "控预算",
+    queue: "少排队",
+    detour: "少绕路",
+    experience: "重体验",
+  };
   const parts = [
     `${getDateLabel(settings.date)} ${settings.startTime}`,
     getDurationLabel(settings.duration),
-    TRANSPORT_MODE_LABELS[settings.transportMode] ?? TRANSPORT_MODE_LABELS.auto,
-    ROUTE_PRIORITY_LABELS[settings.routePriority] ?? ROUTE_PRIORITY_LABELS.time,
+    transportShort[settings.transportMode] ?? TRANSPORT_MODE_LABELS[settings.transportMode],
+    priorityShort[settings.routePriority] ?? ROUTE_PRIORITY_LABELS[settings.routePriority],
   ];
   return buildPreferenceSummaryFromLabels(parts);
 }

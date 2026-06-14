@@ -341,7 +341,7 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[9999] flex h-[45%] max-h-[48%] min-h-[280px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl">
+                <div className="pointer-events-auto absolute inset-x-0 bottom-0 z-[9999] flex h-[45%] max-h-[48%] min-h-[280px] flex-col overflow-hidden">
                   <BottomPlanSheet
                     routePlan={result.routePlan}
                     rankedPois={result.rankedPois}
@@ -369,7 +369,7 @@ export default function Home() {
                   >
                     ← 返回
                   </button>
-                  <h1 className="min-w-0 flex-1 truncate text-sm font-extrabold text-meituan-ink">AI 已为你规划好</h1>
+                  <h1 className="min-w-0 flex-1 truncate text-sm font-extrabold text-meituan-ink">你的路线已就绪</h1>
                 </header>
                 <div className="relative z-30 shrink-0 bg-white/95 backdrop-blur-sm">
                   <TripPersonaCard parseResult={result.parseResult} variant="compact" />

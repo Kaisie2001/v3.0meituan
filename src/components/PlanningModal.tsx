@@ -1,10 +1,10 @@
 "use client";
 
 const planningSteps = [
-  "正在理解你的需求",
-  "正在筛选附近地点",
-  "正在检查排队和可订状态",
-  "正在生成最佳路线",
+  "读懂你的安排",
+  "看看附近有什么好去处",
+  "确认排队和能不能订",
+  "拼成顺路的路线",
 ];
 
 type PlanningModalProps = {
@@ -29,16 +29,15 @@ export function PlanningModal({ open, step }: PlanningModalProps) {
 
         <div className="min-h-0 overflow-y-auto p-4">
           <div className="flex items-start gap-3">
-            <div className="relative mt-0.5 h-9 w-9 shrink-0">
+            <div className="relative mt-0.5 h-10 w-10 shrink-0">
               <div className="absolute inset-0 rounded-full border-2 border-meituan-yellow/30" />
               <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-meituan-yellow" />
-              <div className="absolute inset-2 rounded-full bg-meituan-yellow/20" />
             </div>
             <div className="min-w-0 flex-1">
               <h2 id="planning-modal-title" className="text-base font-extrabold text-meituan-ink">
-                AI 正在为你规划
+                正在帮你排路线
               </h2>
-              <p className="mt-1 text-sm leading-5 text-black/55">会综合距离、排队、可订和本次出行画像生成方案。</p>
+              <p className="mt-1 text-sm leading-5 text-black/55">综合距离、排队和出行偏好，马上就好。</p>
             </div>
           </div>
 
@@ -60,7 +59,7 @@ export function PlanningModal({ open, step }: PlanningModalProps) {
               return (
                 <li
                   key={label}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition ${
                     isActive ? "bg-meituan-yellow/15 font-bold text-meituan-ink" : isDone ? "text-black/45" : "text-black/30"
                   }`}
                 >

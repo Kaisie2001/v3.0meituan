@@ -258,10 +258,10 @@ function collectAlternatePoiIds(params: {
 function buildMapHint(selectedPlanType: SelectedPlanType, fallbackTitle?: string) {
   if (selectedPlanType === "fallback") {
     return fallbackTitle
-      ? `地图已切换为${fallbackTitle}路线示意。${MAP_DEMO_NOTE}`
-      : `地图已切换为备选方案路线示意。${MAP_DEMO_NOTE}`;
+      ? `当前查看：${fallbackTitle} · 高亮为建议路线`
+      : "当前查看备选路线 · 高亮为建议动线";
   }
-  return MAP_DEMO_NOTE;
+  return "高亮路线为推荐动线，点击点位可查看详情";
 }
 
 export function buildMapPresentation(params: {

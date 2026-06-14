@@ -211,25 +211,26 @@ export function ExecutionPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-black/8 bg-white p-4 shadow-soft">
-      <div className="rounded-lg border border-black/8 bg-meituan-gray/50 px-3 py-2.5">
-        <p className="text-xs font-bold text-black/45">将执行</p>
-        <p className="mt-0.5 text-sm font-extrabold text-meituan-ink">{currentPlanLabel}</p>
-        <p className="mt-1 text-[11px] font-semibold leading-5 text-black/62">{selectedPlanSummary.travelSummary}</p>
+    <section className="overflow-hidden rounded-2xl border border-black/6 bg-white shadow-soft">
+      <div className="border-b border-black/5 bg-meituan-gray/40 px-4 py-3">
+        <p className="text-[11px] font-bold text-black/40">即将执行</p>
+        <p className="mt-0.5 text-base font-extrabold text-meituan-ink">{currentPlanLabel}</p>
+        <p className="mt-1 text-[11px] font-medium leading-5 text-black/55">{selectedPlanSummary.travelSummary}</p>
         {selectedPlanSummary.planNote ? (
           <p className="mt-1 text-[11px] leading-5 text-amber-900">{selectedPlanSummary.planNote}</p>
         ) : null}
       </div>
 
+      <div className="p-4">
       {executionStatus === "idle" ? (
         <div>
-          <h2 className="mt-4 text-lg font-extrabold text-meituan-ink">确认并执行</h2>
-          <p className="mt-1 text-sm text-black/58">AI 将按当前出行设置模拟完成订座、转场与计划发送。</p>
+          <h2 className="text-lg font-extrabold text-meituan-ink">确认后帮你搞定</h2>
+          <p className="mt-1 text-sm text-black/55">会依次完成订座、路线衔接，并生成可转发的安排。</p>
 
           <ul className="mt-4 space-y-2">
             {idleActions.map((action) => (
-              <li key={action.id} className="flex items-center gap-2 rounded-lg bg-meituan-gray/80 px-3 py-2 text-sm text-black/70">
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-meituan-yellow/70 text-[10px] font-bold text-meituan-ink">✓</span>
+              <li key={action.id} className="flex items-center gap-2.5 rounded-xl bg-meituan-gray/70 px-3 py-2.5 text-sm text-black/70">
+                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-meituan-yellow text-[10px] font-bold text-meituan-ink">✓</span>
                 {action.label}
               </li>
             ))}
@@ -238,7 +239,7 @@ export function ExecutionPanel({
           <button
             type="button"
             data-testid="execution-start-button"
-            className="mt-5 w-full rounded-lg bg-meituan-yellow px-4 py-3 text-sm font-extrabold text-meituan-ink transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 w-full rounded-2xl bg-meituan-yellow px-4 py-3.5 text-sm font-extrabold text-meituan-ink shadow-md transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!routePlan}
             onClick={handleExecute}
           >
@@ -249,14 +250,14 @@ export function ExecutionPanel({
 
       {executionStatus === "running" ? (
         <div>
-          <div className="mt-4 flex items-start gap-3">
+          <div className="flex items-start gap-3">
             <div className="relative mt-0.5 h-10 w-10 shrink-0">
               <div className="absolute inset-0 rounded-full border-2 border-meituan-yellow/30" />
               <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-meituan-yellow" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-meituan-ink">正在执行{currentPlanLabel}</h2>
-              <p className="mt-1 text-sm text-black/55">请稍候，正在按当前出行设置完成订座与路线安排。</p>
+              <h2 className="text-lg font-extrabold text-meituan-ink">正在处理中</h2>
+              <p className="mt-1 text-sm text-black/55">订座和路线安排进行中，请稍候。</p>
             </div>
           </div>
 
@@ -298,25 +299,30 @@ export function ExecutionPanel({
 
       {executionStatus === "done" ? (
         <div data-testid="execution-done">
-          <div className="mt-4 flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-full bg-emerald-500 text-sm font-bold text-white">✓</span>
-            <h2 className="text-lg font-extrabold text-meituan-ink">执行完成</h2>
+          <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
+            <div className="flex items-center gap-3 px-4 py-4">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-lg font-bold text-white shadow-sm">✓</span>
+              <div>
+                <h2 className="text-lg font-extrabold text-meituan-ink">安排已完成</h2>
+                <p className="mt-0.5 text-xs text-black/50">订座与路线已就绪，出发前可直接使用</p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 border-t border-emerald-100 px-4 py-3">
+              {doneSummary.map((line) => (
+                <li key={line} className="flex items-start gap-2 text-sm font-semibold text-emerald-900">
+                  <span className="mt-0.5 text-emerald-600">✓</span>
+                  <span>{line}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-
-          <ul className="mt-4 space-y-2">
-            {doneSummary.map((line) => (
-              <li key={line} className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
-                {line}
-              </li>
-            ))}
-          </ul>
 
           {bookingVoucher ? <BookingVoucherCard voucher={bookingVoucher} /> : null}
 
           {shareText ? (
-            <div className="mt-4 rounded-xl border border-meituan-yellow/40 bg-yellow-50 p-3">
+            <div className="mt-4 rounded-2xl border border-meituan-yellow/30 bg-yellow-50/80 p-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-extrabold text-black/80">可转发文案</p>
+                <p className="text-sm font-extrabold text-black/80">发给同行人</p>
                 <button
                   type="button"
                   className="rounded-lg bg-meituan-yellow px-3 py-1.5 text-xs font-bold text-meituan-ink hover:brightness-95"
@@ -331,24 +337,22 @@ export function ExecutionPanel({
         </div>
       ) : null}
 
-      <div className="mt-4 rounded-xl border border-black/10 bg-meituan-gray/70">
+      <div className="mt-4 rounded-xl border border-black/6 bg-meituan-gray/40">
         <button
           type="button"
           data-testid="execution-trace-toggle"
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
           onClick={() => setTraceOpen((open) => !open)}
           aria-expanded={traceOpen}
         >
           <span>
-            <span className="block text-sm font-extrabold text-black/78">查看工具调用记录</span>
-            <span className="mt-1 block text-xs leading-5 text-black/50">{traceFoldSummary}</span>
+            <span className="block text-xs font-bold text-black/45">技术细节</span>
+            <span className="mt-0.5 block text-[11px] leading-5 text-black/40">{traceFoldSummary}</span>
             {trace.length ? (
-              <span className="mt-1 inline-block text-xs font-bold text-emerald-700">已完成 {completedTraceCount} 项调用</span>
+              <span className="mt-0.5 inline-block text-[10px] font-semibold text-black/35">{completedTraceCount} 步已完成</span>
             ) : null}
           </span>
-          <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-black/60 shadow-sm">
-            {traceOpen ? "收起" : "展开"}
-          </span>
+          <span className="shrink-0 text-[11px] font-bold text-black/40">{traceOpen ? "收起" : "展开"}</span>
         </button>
 
         {traceOpen ? (
@@ -400,10 +404,11 @@ export function ExecutionPanel({
                 );
               })
             ) : (
-              <p className="rounded-lg bg-white px-3 py-3 text-sm text-black/55">确认执行后，这里会显示完整 mock tool 调用记录。</p>
+              <p className="rounded-lg bg-white px-3 py-3 text-xs text-black/45">执行完成后可查看后台处理记录。</p>
             )}
           </div>
         ) : null}
+      </div>
       </div>
     </section>
   );
