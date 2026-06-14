@@ -309,13 +309,13 @@ export default function Home() {
           <div className="relative h-full overflow-hidden">
             {screen === "input" ? (
               <div data-testid="home-screen" className="relative flex h-full flex-col overflow-hidden bg-[#e8edf2]">
+                <HomeMapPlaceholder className="absolute inset-0 z-0 h-full w-full" />
+
                 <HomeHeader onResetDemo={resetDemoState} />
 
-                <div className="relative min-h-0 flex-1">
-                  <HomeMapPlaceholder className="absolute inset-0 h-full w-full" />
-                </div>
+                <div className="relative z-10 min-h-0 flex-1" aria-hidden="true" />
 
-                <div className="relative z-10 shrink-0">
+                <div className="relative z-20 shrink-0">
                   <div className="overflow-hidden rounded-t-[24px] border-t border-white/80 bg-white shadow-[0_-10px_36px_rgba(15,23,42,0.14)]">
                     <div className="flex justify-center pt-2.5">
                       <div className="h-1 w-10 rounded-full bg-black/10" aria-hidden="true" />
