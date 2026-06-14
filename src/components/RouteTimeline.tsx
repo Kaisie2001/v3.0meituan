@@ -82,14 +82,39 @@ export function RouteTimeline({
               {routeGuidance.transportLabel}
             </span>
           </div>
-          <ul className="mt-2 space-y-1.5">
-            {routeGuidance.steps.map((step) => (
-              <li key={step} className="text-xs leading-5 text-black/65">
-                · {step}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-2 border-t border-black/8 pt-2 text-[11px] leading-4 text-black/45">{routeGuidance.mapDemoNote}</p>
+          {routeGuidance.legs?.length ? (
+            <div className="mt-2 space-y-2">
+              {routeGuidance.legs.map((leg, index) => (
+                <div key={`${leg.fromName}-${leg.toName}-${index}`} className="rounded-md bg-white/80 px-2.5 py-2">
+                  <p className="text-xs font-bold text-meituan-ink">
+                    {leg.fromName} → {leg.toName}
+                    <span className="ml-1 font-normal text-black/45">
+                      · {leg.transportLabel} · {leg.etaMinutes} 分钟
+                    </span>
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {leg.steps.map((step) => (
+                      <li key={step} className="text-xs leading-5 text-black/65">
+                        · {step}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-[10px] leading-4 text-amber-900/85">{leg.tip}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ul className="mt-2 space-y-1.5">
+              {routeGuidance.steps.map((step) => (
+                <li key={step} className="text-xs leading-5 text-black/65">
+                  · {step}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 border-t border-black/8 pt-2 text-[11px] leading-4 text-black/45">
+            {routeGuidance.legDemoNote ?? routeGuidance.mapDemoNote}
+          </p>
         </div>
       ) : null}
 

@@ -215,17 +215,42 @@ function buildRouteThreeSteps(slots: RouteSlot[], parseResult: ParseResult): Rou
   return steps.slice(0, 3);
 }
 
-function buildCompactGuidanceLines(guidance: RouteGuidanceSummary) {
-  const lines: string[] = [];
-  for (const step of guidance.steps) {
-    if (step && !lines.includes(step)) lines.push(step);
-    if (lines.length >= 3) break;
-  }
-  const hint = guidance.timeHint?.split(/[。；]/)[0]?.trim();
-  if (hint && !lines.includes(hint) && lines.length < 3) lines.push(hint);
-  const pref = guidance.preferenceHint?.trim();
-  if (pref && !lines.includes(pref) && lines.length < 3) lines.push(pref);
-  return lines.slice(0, 3);
+function CompactGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
+  const legs = guidance.legs?.length ? guidance.legs : [];
+  if (!legs.length) return null;
+
+  return (
+    <div className="rounded-xl bg-meituan-gray/50 px-3 py-2.5">
+      <p className="text-[10px] font-bold text-black/45">
+        这一段怎么走 · {guidance.transportLabel}
+      </p>
+      <div className="mt-2 space-y-2.5">
+        {legs.map((leg, index) => (
+          <div key={`${leg.fromName}-${leg.toName}-${index}`} className="rounded-lg bg-white/80 px-2.5 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 text-[11px] font-extrabold leading-snug text-meituan-ink">
+                {leg.fromName}
+                <span className="mx-1 font-normal text-black/35">→</span>
+                {leg.toName}
+              </p>
+              <span className="shrink-0 rounded-full bg-meituan-yellow/25 px-1.5 py-0.5 text-[9px] font-bold text-meituan-ink">
+                {leg.transportLabel} · {leg.etaMinutes}分
+              </span>
+            </div>
+            <ul className="mt-1.5 space-y-0.5">
+              {leg.steps.map((step) => (
+                <li key={step} className="text-[11px] leading-5 text-black/62">
+                  {step}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-[10px] leading-4 text-amber-900/90">{leg.tip}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-[10px] leading-4 text-black/38">{guidance.legDemoNote}</p>
+    </div>
+  );
 }
 
 function extractPriorityLabel(settingImpactSummary?: string, travelSettingsSummary?: string) {
@@ -322,24 +347,6 @@ function CollapseSection({
         <span className="shrink-0 text-[10px] font-bold text-black/45">{open ? "收起" : "展开"}</span>
       </button>
       {open ? <div className="space-y-2 border-t border-black/6 px-3 pb-3 pt-2">{children}</div> : null}
-    </div>
-  );
-}
-
-function CompactGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
-  const lines = buildCompactGuidanceLines(guidance);
-  if (!lines.length) return null;
-
-  return (
-    <div className="rounded-xl bg-meituan-gray/50 px-3 py-2">
-      <p className="text-[10px] font-bold text-black/40">怎么去 · {guidance.transportLabel}</p>
-      <ul className="mt-1 space-y-0.5">
-        {lines.map((line) => (
-          <li key={line} className="text-[11px] leading-5 text-black/62">
-            {line}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
