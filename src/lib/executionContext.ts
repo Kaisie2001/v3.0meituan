@@ -25,6 +25,13 @@ export type ExecutionUiContext = {
   selectedPlanSummary: SelectedPlanSummary;
 };
 
+const CORE_IDLE_ACTIONS: ExecutionAction[] = [
+  { id: "apply-plan", label: "应用当前方案" },
+  { id: "check-risk", label: "检查预约 / 排队风险" },
+  { id: "update-route", label: "更新转场路线" },
+  { id: "share-plan", label: "生成可分享计划" },
+];
+
 function resolveActiveSlots(
   routePlan: RoutePlan,
   selectedPlanType: SelectedPlanType,
@@ -95,59 +102,37 @@ export function buildExecutionPlanLabel(
   selectedFallbackIndex: number | null,
 ) {
   if (selectedPlanType === "fallback" && selectedFallbackIndex !== null) {
-    return routePlan.fallbackPlans?.[selectedFallbackIndex]?.title ?? "备选方案";
+    const title = routePlan.fallbackPlans?.[selectedFallbackIndex]?.title?.trim();
+    if (title) return title.startsWith("备选") ? title : `备选：${title}`;
+    return "备选方案";
   }
   return "主方案";
 }
 
-function buildTransportIdleActions(transportMode: TravelSettings["transportMode"]): ExecutionAction[] {
-  switch (transportMode) {
-    case "transit":
-      return [
-        { id: "check-open", label: "检查目的地营业/可订状态" },
-        { id: "transit-route", label: "生成公共交通转场建议" },
-        { id: "lock", label: "锁定餐厅/活动预约" },
-        { id: "share", label: "生成可转发计划" },
-      ];
-    case "driving":
-      return [
-        { id: "check-open", label: "检查目的地营业/可订状态" },
-        { id: "drive-route", label: "估算打车/驾车转场时间" },
-        { id: "lock", label: "锁定餐厅/活动预约" },
-        { id: "share", label: "生成可转发计划" },
-      ];
-    case "walking":
-      return [
-        { id: "walk-distance", label: "检查步行转场距离" },
-        { id: "check-open", label: "检查目的地营业/可订状态" },
-        { id: "lock", label: "锁定餐厅/活动预约" },
-        { id: "share", label: "生成可转发计划" },
-      ];
-    default:
-      return [
-        { id: "check-open", label: "检查目的地营业/可订状态" },
-        { id: "auto-route", label: "生成综合转场建议" },
-        { id: "lock", label: "锁定餐厅/活动预约" },
-        { id: "share", label: "生成可转发计划" },
-      ];
+export function buildExecutionScopeLabel(selectedPlanType: SelectedPlanType, currentPlanLabel: string) {
+  if (selectedPlanType === "fallback") {
+    const detail = currentPlanLabel.startsWith("备选") ? currentPlanLabel : `备选：${currentPlanLabel}`;
+    return {
+      scope: "正在执行：备选方案",
+      planDetail: detail,
+    };
   }
+  return {
+    scope: "正在执行：主方案",
+    planDetail: currentPlanLabel,
+  };
 }
-
-const FALLBACK_IDLE_ACTIONS: ExecutionAction[] = [
-  { id: "apply-fallback", label: "应用已选择的备选方案" },
-  { id: "replace-node", label: "替换高风险节点" },
-  { id: "reconfirm-risk", label: "重新确认预约/排队风险" },
-];
 
 export function buildContextualIdleActions(params: {
   travelSettings: TravelSettings;
   selectedPlanType: SelectedPlanType;
 }): ExecutionAction[] {
-  const base = buildTransportIdleActions(params.travelSettings.transportMode);
   if (params.selectedPlanType === "fallback") {
-    return [...FALLBACK_IDLE_ACTIONS, ...base];
+    return CORE_IDLE_ACTIONS.map((action) =>
+      action.id === "apply-plan" ? { ...action, label: "应用已选择的备选方案" } : action,
+    );
   }
-  return base;
+  return CORE_IDLE_ACTIONS;
 }
 
 export function buildContextualRunningSteps(params: {
@@ -156,16 +141,16 @@ export function buildContextualRunningSteps(params: {
 }) {
   const steps =
     params.selectedPlanType === "fallback"
-      ? ["正在应用备选方案", "正在确认替代节点可用", "正在更新路线与预约动作", "正在生成分享文案"]
-      : ["正在检查主方案可订状态", "正在锁定推荐餐厅/活动", "正在生成转场路线", "正在生成分享文案"];
+      ? ["正在应用备选方案", "检查预约余量", "更新路线衔接", "生成分享文案"]
+      : ["正在为你锁定安排…", "检查预约余量", "更新路线衔接", "生成分享文案"];
 
-  const hints: string[] = [];
+  const hints = ["检查预约余量、路线衔接和分享文案"];
   const effects = buildTravelSettingEffects(params.travelSettings);
   if (effects.periodKey === "evening_rush") {
-    hints.push("当前为晚高峰，正在优先校验排队和可订风险。");
+    hints.push("晚高峰时段，优先校验排队与可订状态。");
   }
   if (params.travelSettings.routePriority === "queue") {
-    hints.push("已优先选择等待更短或可预约节点。");
+    hints.push("已按少排队优先筛选节点。");
   }
 
   return { steps, hints };
@@ -179,26 +164,24 @@ export function buildContextualDoneSummary(params: {
   traceHasReservation: boolean;
   traceHasOrder: boolean;
 }) {
-  const items = [
-    "已确认当前执行方案",
-    params.traceHasReservation || params.traceHasOrder ? "已完成订座 / 下单 / 活动预约 mock" : "已完成可订与预约检查 mock",
-    params.hasRoutePlan ? "已生成转场建议" : "已生成执行摘要",
-    params.hasShareText ? "已生成可转发文案" : "已准备分享文案",
-    "已准备备选方案回退记录",
+  void params.currentPlanLabel;
+  void params.hasRoutePlan;
+  void params.traceHasReservation;
+  void params.traceHasOrder;
+
+  return [
+    params.selectedPlanType === "fallback" ? "已应用备选方案" : "已应用当前方案",
+    "已更新路线衔接",
+    "已模拟锁定餐厅 / 活动预约",
+    params.hasShareText ? "已生成可转发计划" : "已生成可转发计划",
   ];
-
-  if (params.selectedPlanType === "fallback") {
-    items.unshift(`执行方案：${params.currentPlanLabel}`);
-  }
-
-  return items;
 }
 
 export function buildTraceFoldSummary(selectedPlanType: SelectedPlanType) {
   if (selectedPlanType === "fallback") {
-    return "包含备选方案应用、替代节点检查、路线更新、订座/下单和分享文案生成。";
+    return "备选方案应用、替代节点检查、路线更新、订座/下单 mock、分享文案生成";
   }
-  return "包含可订检查、路线生成、订座/下单和分享文案生成。";
+  return "可订检查、路线更新、订座/下单 mock、分享文案生成";
 }
 
 export function buildEnhancedShareText(params: {

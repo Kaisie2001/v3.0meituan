@@ -1,0 +1,160 @@
+"use client";
+
+import { MockQrCode } from "@/components/MockQrCode";
+import type { ExecutionArtifact } from "@/lib/executionArtifacts";
+
+type ExecutionArtifactCardProps = {
+  artifact: ExecutionArtifact;
+  compactTop?: boolean;
+};
+
+export function ExecutionArtifactCard({ artifact, compactTop = false }: ExecutionArtifactCardProps) {
+  const topSpacing = compactTop ? "mt-0" : "mt-3";
+  if (artifact.type === "queue") {
+    const queueLabel = `${artifact.queueTableType} ${artifact.queueNumber}`;
+
+    return (
+      <div data-testid="execution-artifact-queue" className={`${topSpacing} overflow-hidden rounded-xl border border-black/8 bg-white`}>
+        <div className="border-b border-black/6 px-3 py-2.5">
+          <p className="text-sm font-extrabold text-meituan-ink">{artifact.title}</p>
+        </div>
+
+        <div className="space-y-3 px-3 py-3">
+          <div className="rounded-xl bg-gradient-to-br from-meituan-yellow/25 via-orange-50 to-white px-3 py-3">
+            <div className="flex items-center justify-between gap-2 text-[10px] text-black/45">
+              <span>取号时间 {artifact.queueStartedAt}</span>
+              <span className="rounded-full bg-orange-100 px-2 py-0.5 font-bold text-orange-700">待叫号</span>
+            </div>
+            <p
+              data-testid="execution-queue-number"
+              className="mt-2 text-[28px] font-extrabold leading-none tracking-wide text-meituan-ink"
+            >
+              {queueLabel}
+            </p>
+            <p data-testid="execution-queue-ahead-count" className="mt-2 text-sm font-bold text-black/70">
+              还需等待 {artifact.aheadCount} 桌
+            </p>
+            <p className="mt-1 text-xs text-black/55">
+              预计等待 <span className="font-bold text-black/70">{artifact.estimatedWaitMinutes}</span>
+            </p>
+          </div>
+
+          <div data-testid="execution-queue-progress">
+            <div className="flex items-center gap-1">
+              {artifact.statusSteps.map((step) => (
+                <div key={step.label} className="min-w-0 flex-1">
+                  <div
+                    className={`h-1.5 rounded-full ${
+                      step.state === "done"
+                        ? "bg-meituan-yellow"
+                        : step.state === "active"
+                          ? "bg-gradient-to-r from-meituan-yellow to-orange-400"
+                          : "bg-black/8"
+                    }`}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-1.5 flex justify-between gap-1">
+              {artifact.statusSteps.map((step) => (
+                <p
+                  key={`${step.label}-label`}
+                  className={`min-w-0 flex-1 text-center text-[10px] leading-4 ${
+                    step.state === "active"
+                      ? "font-extrabold text-orange-700"
+                      : step.state === "done"
+                        ? "font-semibold text-meituan-ink"
+                        : "text-black/35"
+                  }`}
+                >
+                  {step.label}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5 rounded-lg bg-meituan-gray/45 px-2.5 py-2 text-xs text-black/62">
+            <p>
+              <span className="font-bold text-black/70">餐厅：</span>
+              {artifact.venueName}
+            </p>
+            <p>
+              <span className="font-bold text-black/70">取号时间：</span>
+              {artifact.queueStartedAt}
+            </p>
+            <p>
+              <span className="font-bold text-black/70">手机号：</span>
+              {artifact.phoneMasked}
+            </p>
+            <p>
+              <span className="font-bold text-black/70">进度通知：</span>
+              {artifact.notificationEnabled ? "已开启" : "未开启"}
+            </p>
+          </div>
+
+          <p className="text-[11px] leading-4 text-amber-900/85">{artifact.cancelHint}</p>
+          <p className="rounded-lg bg-meituan-gray/40 px-2.5 py-2 text-[10px] leading-4 text-black/48">
+            商家说明：{artifact.merchantNote}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (artifact.type === "reservation") {
+    return (
+      <div data-testid="execution-artifact-reservation" className={`${topSpacing} overflow-hidden rounded-xl border border-black/8 bg-white`}>
+        <div className="bg-meituan-yellow/15 px-3 py-2.5">
+          <p className="text-sm font-extrabold text-meituan-ink">{artifact.title}</p>
+          <p className="mt-0.5 text-xs text-black/55">{artifact.venueName}</p>
+        </div>
+        <div className="space-y-1.5 px-3 py-3 text-xs text-black/62">
+          <p>
+            <span className="font-bold text-black/70">时间：</span>
+            {artifact.timeLabel}
+          </p>
+          <p>
+            <span className="font-bold text-black/70">人数：</span>
+            {artifact.partySize} 人
+          </p>
+          <p>
+            <span className="font-bold text-black/70">状态：</span>
+            {artifact.status}
+          </p>
+          <p className="text-[10px] leading-4 text-black/42">{artifact.note}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (artifact.type === "voucher") {
+    return (
+      <div data-testid="execution-artifact-voucher" className={`${topSpacing} overflow-hidden rounded-xl border border-black/8 bg-white`}>
+        <div className="bg-meituan-yellow/15 px-3 py-2.5">
+          <p className="text-sm font-extrabold text-meituan-ink">{artifact.title}</p>
+          <p className="mt-0.5 text-xs text-black/55">{artifact.venueName}</p>
+        </div>
+        <div className="space-y-2 px-3 py-3">
+          <MockQrCode seed={artifact.qrPayload} className="py-1" />
+          <p className="text-center text-xs font-bold text-black/60">核销码：{artifact.code}</p>
+          <p className="text-center text-[10px] leading-4 text-black/45">{artifact.note}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="execution-artifact-share" className={`${topSpacing} overflow-hidden rounded-xl border border-black/8 bg-white`}>
+      <div className="bg-meituan-yellow/15 px-3 py-2.5">
+        <p className="text-sm font-extrabold text-meituan-ink">{artifact.title}</p>
+      </div>
+      <div className="space-y-2 px-3 py-3">
+        <p className="text-xs leading-5 text-black/62">{artifact.summary}</p>
+        <p className="whitespace-pre-wrap rounded-lg bg-meituan-gray/50 px-2.5 py-2 text-xs leading-5 text-black/55">
+          {artifact.shareText}
+        </p>
+        <p className="text-[10px] leading-4 text-black/42">{artifact.note}</p>
+      </div>
+    </div>
+  );
+}

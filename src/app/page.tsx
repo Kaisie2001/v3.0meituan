@@ -4,7 +4,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import dynamic from "next/dynamic";
 import { BottomPlanSheet } from "@/components/BottomPlanSheet";
 import { PlanningModal } from "@/components/PlanningModal";
-import { ExecutionPanel } from "@/components/ExecutionPanel";
+import { ExecutionSheet } from "@/components/ExecutionSheet";
 import { InputPanel } from "@/components/InputPanel";
 import { IntentSummary } from "@/components/IntentSummary";
 import { PoiDetailPanel } from "@/components/PoiDetailPanel";
@@ -328,7 +328,7 @@ export default function Home() {
               </div>
             ) : null}
 
-            {screen === "result" ? (
+            {screen === "result" || screen === "execute" ? (
               <div data-testid="result-screen" className="relative h-full overflow-hidden bg-white">
                 <div className="absolute inset-0 z-0 pb-16 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[1]">
                   <LeafletPlannerMap
@@ -353,7 +353,10 @@ export default function Home() {
                     selectedFallbackIndex={selectedFallbackIndex}
                     onSelectMainPlan={handleSelectMainPlan}
                     onSelectFallbackPlan={handleSelectFallbackPlan}
-                    onConfirmExecute={() => dispatchFlow({ type: "OPEN_EXECUTE" })}
+                    onConfirmExecute={() => {
+                      setExecutionPanelKey((key) => key + 1);
+                      dispatchFlow({ type: "OPEN_EXECUTE" });
+                    }}
                     travelSettings={travelSettings}
                     travelSettingsSummary={travelSettingsSummary}
                     settingImpactSummary={settingImpactSummary}
@@ -374,6 +377,20 @@ export default function Home() {
                 <div className="relative z-30 shrink-0 bg-white/95 backdrop-blur-sm">
                   <TripPersonaCard parseResult={result.parseResult} variant="compact" />
                 </div>
+
+                <ExecutionSheet
+                  key={executionPanelKey}
+                  open={screen === "execute"}
+                  onClose={() => dispatchFlow({ type: "OPEN_RESULT" })}
+                  routePlan={result.routePlan}
+                  intent={result.parseResult.intent}
+                  selectedPlanType={selectedPlanType}
+                  selectedFallbackIndex={selectedFallbackIndex}
+                  travelSettings={travelSettings}
+                  currentPlanLabel={executionPlanLabel}
+                  selectedPlanSummary={selectedPlanSummary}
+                  onViewFinalPlan={() => dispatchFlow({ type: "OPEN_RESULT" })}
+                />
               </div>
             ) : null}
 
@@ -408,22 +425,6 @@ export default function Home() {
                 <div className="opacity-80">
                   <IntentSummary parseResult={result.parseResult} />
                 </div>
-              </div>
-            ) : null}
-
-            {screen === "execute" ? (
-              <div data-testid="execution-screen" className="h-full space-y-3 overflow-y-auto px-3 pb-5 pt-3">
-                <ScreenBackButton label="返回方案" onClick={() => dispatchFlow({ type: "OPEN_RESULT" })} />
-                <ExecutionPanel
-                  key={executionPanelKey}
-                  routePlan={result.routePlan}
-                  intent={result.parseResult.intent}
-                  selectedPlanType={selectedPlanType}
-                  selectedFallbackIndex={selectedFallbackIndex}
-                  travelSettings={travelSettings}
-                  currentPlanLabel={executionPlanLabel}
-                  selectedPlanSummary={selectedPlanSummary}
-                />
               </div>
             ) : null}
 

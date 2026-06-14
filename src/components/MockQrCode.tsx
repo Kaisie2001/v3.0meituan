@@ -1,5 +1,7 @@
 "use client";
 
+import { buildQrSeed } from "@/lib/qrSeed";
+
 type MockQrCodeProps = {
   seed: string;
   size?: number;
@@ -92,13 +94,4 @@ export function MockQrCode({ seed, size = 21, className }: MockQrCodeProps) {
       <p className="mt-2 text-center text-[10px] font-bold text-black/45">Demo 凭证码</p>
     </div>
   );
-}
-
-export function buildQrSeed(params: {
-  reservationId?: string;
-  orderId?: string;
-  ticketId?: string;
-  planLabel: string;
-}) {
-  return [params.planLabel, params.reservationId, params.orderId, params.ticketId].filter(Boolean).join("|");
 }

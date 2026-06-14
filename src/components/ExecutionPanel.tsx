@@ -1,13 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { appendVoucherShareLine, BookingVoucherCard, buildBookingVoucherModel } from "@/components/BookingVoucherCard";
+import { appendVoucherShareLine } from "@/components/BookingVoucherCard";
+import { ExecutionArtifactCard } from "@/components/ExecutionArtifactCard";
 import {
-  buildContextualDoneSummary,
+  buildExecutionArtifacts,
+  getExecutionArtifactPrimaryActionLabel,
+} from "@/lib/executionArtifacts";
+import {
   buildContextualIdleActions,
   buildContextualRunningSteps,
   buildEnhancedShareText,
-  buildTraceFoldSummary,
+  buildExecutionScopeLabel,
   type SelectedPlanSummary,
   type SelectedPlanType,
 } from "@/lib/executionContext";
@@ -15,7 +19,7 @@ import type { TravelSettings } from "@/lib/preferenceSummary";
 import type { ExecutionTraceStep, Intent, RoutePlan } from "@/lib/types";
 import { executePlan } from "@/lib/executor/executePlan";
 
-type ExecutionPanelProps = {
+export type ExecutionPanelProps = {
   routePlan?: RoutePlan;
   intent: Intent;
   selectedPlanType: SelectedPlanType;
@@ -23,29 +27,30 @@ type ExecutionPanelProps = {
   travelSettings: TravelSettings;
   currentPlanLabel: string;
   selectedPlanSummary: SelectedPlanSummary;
+  onViewFinalPlan?: () => void;
+  onClose?: () => void;
+  variant?: "page" | "modal";
+};
+
+type ExecutionPanelBodyProps = ExecutionPanelProps & {
+  executionStatus: ExecutionStatus;
+  runningStep: number;
+  trace: ExecutionTraceStep[];
+  shareText: string;
+  copied: boolean;
+  sharePreviewOpen: boolean;
+  queueCancelled: boolean;
+  onExecute: () => void;
+  onCopy: () => void;
+  onOpenSharePreview: () => void;
+  onCancelQueue: () => void;
 };
 
 type ExecutionStatus = "idle" | "running" | "done";
 
 const RUNNING_STEP_MS = 450;
-
-function summarizePayload(payload: unknown) {
-  if (!payload || typeof payload !== "object") return payload ? String(payload) : "无";
-  const record = payload as Record<string, unknown>;
-  const entries = Object.entries(record)
-    .filter(([, value]) => value !== undefined && value !== "")
-    .slice(0, 4)
-    .map(([key, value]) => `${key}: ${typeof value === "object" ? JSON.stringify(value) : String(value)}`);
-  return entries.length ? entries.join(" / ") : "无";
-}
-
-function extractReceiptIds(step: ExecutionTraceStep) {
-  const response = step.response as Record<string, unknown> | undefined;
-  if (!response) return [];
-  return ["reservationId", "orderId", "ticketId", "receiptId", "routeId", "messageId"]
-    .map((key) => (typeof response[key] === "string" ? `${key}: ${response[key]}` : ""))
-    .filter(Boolean);
-}
+const DEMO_EXECUTION_NOTE =
+  "当前为 demo 模拟执行，真实产品可接入美团/点评预订、排队、购票与地图导航服务。";
 
 function collectReceiptIds(trace: ExecutionTraceStep[]) {
   const ids: Record<string, string> = {};
@@ -90,7 +95,13 @@ function delay(ms: number) {
   });
 }
 
-export function ExecutionPanel({
+export function getExecutionModalTitle(status: ExecutionStatus) {
+  if (status === "done") return "已为你安排好";
+  if (status === "running") return "正在安排";
+  return "确认并模拟执行";
+}
+
+export function ExecutionPanelBody({
   routePlan,
   intent,
   selectedPlanType,
@@ -98,13 +109,27 @@ export function ExecutionPanel({
   travelSettings,
   currentPlanLabel,
   selectedPlanSummary,
-}: ExecutionPanelProps) {
-  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>("idle");
-  const [runningStep, setRunningStep] = useState(0);
-  const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
-  const [shareText, setShareText] = useState("");
-  const [traceOpen, setTraceOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  onViewFinalPlan,
+  onClose,
+  variant = "page",
+  executionStatus,
+  runningStep,
+  trace,
+  shareText,
+  copied,
+  sharePreviewOpen,
+  queueCancelled,
+  onExecute,
+  onCopy,
+  onOpenSharePreview,
+  onCancelQueue,
+}: ExecutionPanelBodyProps) {
+  const isModal = variant === "modal";
+
+  const scopeLabel = useMemo(
+    () => buildExecutionScopeLabel(selectedPlanType, currentPlanLabel),
+    [selectedPlanType, currentPlanLabel],
+  );
 
   const idleActions = useMemo(
     () => buildContextualIdleActions({ travelSettings, selectedPlanType }),
@@ -116,19 +141,19 @@ export function ExecutionPanel({
     [travelSettings, selectedPlanType],
   );
 
-  const traceFoldSummary = useMemo(() => buildTraceFoldSummary(selectedPlanType), [selectedPlanType]);
-
   const receiptIds = useMemo(() => collectReceiptIds(trace), [trace]);
 
-  const bookingVoucher = useMemo(() => {
+  const executionArtifact = useMemo(() => {
     if (executionStatus !== "done" || !routePlan) return null;
-    return buildBookingVoucherModel({
+    return buildExecutionArtifacts({
       routePlan,
       travelSettings,
       selectedPlanType,
       selectedFallbackIndex,
       currentPlanLabel,
       partySize: intent.partySize ?? travelSettings.partySize,
+      shareText,
+      planSummary: selectedPlanSummary.nodePreview,
       receiptIds,
     });
   }, [
@@ -139,25 +164,15 @@ export function ExecutionPanel({
     selectedFallbackIndex,
     currentPlanLabel,
     intent.partySize,
+    shareText,
+    selectedPlanSummary.nodePreview,
     receiptIds,
   ]);
 
-  const doneSummary = useMemo(() => {
-    const traceHasReservation = trace.some((step) => step.toolName === "ReserveTable" && step.status === "success");
-    const traceHasOrder = trace.some(
-      (step) => (step.toolName === "PlaceOrder" || step.toolName === "BookTickets") && step.status === "success",
-    );
-    return buildContextualDoneSummary({
-      selectedPlanType,
-      currentPlanLabel,
-      hasShareText: Boolean(shareText),
-      hasRoutePlan: Boolean(routePlan),
-      traceHasReservation,
-      traceHasOrder,
-    });
-  }, [trace, routePlan, selectedPlanType, currentPlanLabel, shareText]);
+  const primaryActionLabel = executionArtifact
+    ? getExecutionArtifactPrimaryActionLabel(executionArtifact.type)
+    : "查看最终行程";
 
-  const completedTraceCount = trace.filter((step) => step.status === "success").length;
   const progressPercent =
     executionStatus === "running"
       ? Math.round(((runningStep + 1) / runningSteps.length) * 100)
@@ -165,7 +180,189 @@ export function ExecutionPanel({
         ? 100
         : 0;
 
+  const summaryBlock = (
+    <div className={isModal ? "rounded-xl bg-meituan-gray/40 px-3 py-2.5" : "border-b border-black/5 bg-meituan-gray/30 px-3.5 py-3"}>
+      {!isModal ? (
+        <p className="text-[10px] font-bold uppercase tracking-wide text-black/38">
+          {executionStatus === "idle" ? "已准备执行" : executionStatus === "running" ? "正在安排" : "执行完成"}
+        </p>
+      ) : null}
+      <p className="text-sm font-extrabold text-meituan-ink">{scopeLabel.scope}</p>
+      {selectedPlanType === "fallback" ? (
+        <p className="mt-0.5 text-xs font-semibold text-black/58">{scopeLabel.planDetail}</p>
+      ) : null}
+      <p className="mt-1.5 text-[11px] leading-5 text-black/52">{selectedPlanSummary.travelSummary}</p>
+      {selectedPlanSummary.planNote ? (
+        <p className="mt-1 text-[11px] leading-5 text-black/45">{selectedPlanSummary.planNote}</p>
+      ) : null}
+    </div>
+  );
+
+  return (
+    <>
+      {!isModal ? summaryBlock : null}
+
+      <div className={isModal ? "" : "p-3.5"}>
+        {isModal && executionStatus !== "done" ? summaryBlock : null}
+
+        {executionStatus === "idle" ? (
+          <div data-testid="execution-idle">
+            <p className="text-sm font-semibold text-black/62">确认后将完成 4 件事</p>
+
+            <ol className="mt-2.5 space-y-1.5">
+              {idleActions.map((action, index) => (
+                <li key={action.id} className="flex items-start gap-2 text-[13px] leading-5 text-black/62">
+                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-black/6 text-[10px] font-bold text-black/45">
+                    {index + 1}
+                  </span>
+                  {action.label}
+                </li>
+              ))}
+            </ol>
+
+            <div data-testid="execution-modal-confirm-button">
+              <button
+                type="button"
+                data-testid="execution-start-button"
+                className="mt-4 w-full rounded-xl bg-meituan-yellow px-4 py-3 text-sm font-extrabold text-meituan-ink shadow-sm transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!routePlan}
+                onClick={onExecute}
+              >
+                确认并模拟执行
+              </button>
+            </div>
+            <p className="mt-2 text-[10px] leading-4 text-black/38">{DEMO_EXECUTION_NOTE}</p>
+          </div>
+        ) : null}
+
+        {executionStatus === "running" ? (
+          <div data-testid="execution-running">
+            <h2 className="text-base font-extrabold text-meituan-ink">{runningSteps[runningStep] ?? "正在为你锁定安排…"}</h2>
+            {runningHints[0] ? <p className="mt-1 text-xs leading-5 text-black/48">{runningHints[0]}</p> : null}
+
+            <div className="mt-3 h-1 overflow-hidden rounded-full bg-black/6">
+              <div
+                className="h-full rounded-full bg-meituan-yellow/80 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+
+            <ul className="mt-3 space-y-1">
+              {runningSteps.map((label, index) => {
+                const active = index === runningStep;
+                const done = index < runningStep;
+                return (
+                  <li
+                    key={label}
+                    className={`text-xs leading-5 ${active ? "font-semibold text-black/70" : done ? "text-black/40" : "text-black/28"}`}
+                  >
+                    {done ? "✓ " : active ? "· " : "  "}
+                    {label}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ) : null}
+
+        {executionStatus === "done" ? (
+          <div data-testid="execution-done">
+            <div className="mb-3">
+              {!isModal ? (
+                <h2 data-testid="execution-complete-title" className="text-base font-extrabold text-meituan-ink">
+                  已为你安排好
+                </h2>
+              ) : null}
+              <p className={`text-[11px] leading-5 text-black/50 ${isModal ? "" : "mt-1"}`}>
+                {selectedPlanSummary.travelSummary}
+              </p>
+            </div>
+
+            {executionArtifact ? <ExecutionArtifactCard artifact={executionArtifact} compactTop /> : null}
+
+            {queueCancelled ? (
+              <p className="mt-2 rounded-lg bg-meituan-gray/50 px-2.5 py-2 text-xs text-black/55">
+                已取消排队（demo 模拟，未接入真实取消接口）
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                type="button"
+                data-testid="execution-view-plan-button"
+                className="w-full rounded-xl bg-meituan-yellow px-4 py-3 text-sm font-extrabold text-meituan-ink shadow-sm transition hover:brightness-95"
+                onClick={onViewFinalPlan ?? onClose}
+              >
+                {primaryActionLabel}
+              </button>
+              {executionArtifact?.type === "queue" && !queueCancelled ? (
+                <button
+                  type="button"
+                  data-testid="execution-cancel-queue-button"
+                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-black/65 transition hover:bg-meituan-gray/50"
+                  onClick={onCancelQueue}
+                >
+                  取消排队
+                </button>
+              ) : null}
+              {executionArtifact?.type !== "queue" && shareText ? (
+                <button
+                  type="button"
+                  data-testid="execution-copy-share-button"
+                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-black/65 transition hover:bg-meituan-gray/50"
+                  onClick={onCopy}
+                >
+                  {copied ? "已复制分享文案" : "复制分享文案"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                data-testid="execution-back-plan-button"
+                className="w-full py-2 text-sm font-semibold text-black/45 transition hover:text-black/65"
+                onClick={onClose ?? onViewFinalPlan}
+              >
+                返回方案
+              </button>
+            </div>
+
+            <p className="mt-3 text-[10px] leading-4 text-black/38">{DEMO_EXECUTION_NOTE}</p>
+
+            {executionArtifact?.type === "share" && shareText && sharePreviewOpen ? (
+              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-meituan-gray/50 px-3 py-2 text-xs leading-5 text-black/55">
+                {shareText}
+              </p>
+            ) : executionArtifact?.type === "share" && shareText ? (
+              <button
+                type="button"
+                className="mt-2 text-[11px] font-semibold text-black/40 underline-offset-2 hover:underline"
+                onClick={onOpenSharePreview}
+              >
+                预览分享文案
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+export function useExecutionPanelState(props: ExecutionPanelProps) {
+  const [executionStatus, setExecutionStatus] = useState<ExecutionStatus>("idle");
+  const [runningStep, setRunningStep] = useState(0);
+  const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
+  const [shareText, setShareText] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
+  const [queueCancelled, setQueueCancelled] = useState(false);
+
+  const { steps: runningSteps } = useMemo(
+    () => buildContextualRunningSteps({ travelSettings: props.travelSettings, selectedPlanType: props.selectedPlanType }),
+    [props.travelSettings, props.selectedPlanType],
+  );
+
   async function handleExecute() {
+    const { routePlan, intent, travelSettings, currentPlanLabel, selectedPlanType, selectedFallbackIndex } = props;
     if (!routePlan || executionStatus === "running") return;
 
     setExecutionStatus("running");
@@ -173,7 +370,8 @@ export function ExecutionPanel({
     setTrace([]);
     setShareText("");
     setCopied(false);
-    setTraceOpen(false);
+    setSharePreviewOpen(false);
+    setQueueCancelled(false);
 
     const executePromise = executePlan({ routePlan, intent, shareTo: "对方" });
 
@@ -185,16 +383,29 @@ export function ExecutionPanel({
     const result = await executePromise;
     const shareStep = result.find((step) => step.toolName === "GenerateShareText" && step.status === "success");
     const originalShareText = (shareStep?.response as { shareText?: string } | undefined)?.shareText ?? "";
-    const enhancedShareText = appendVoucherShareLine(
-      buildEnhancedShareText({
-        originalShareText,
-        travelSettings,
-        currentPlanLabel,
-        selectedPlanType,
-        routePlan,
-        selectedFallbackIndex,
-      }),
-    );
+    let enhancedShareText = buildEnhancedShareText({
+      originalShareText,
+      travelSettings,
+      currentPlanLabel,
+      selectedPlanType,
+      routePlan,
+      selectedFallbackIndex,
+    });
+
+    const artifactPreview = buildExecutionArtifacts({
+      routePlan,
+      travelSettings,
+      selectedPlanType,
+      selectedFallbackIndex,
+      currentPlanLabel,
+      partySize: intent.partySize ?? travelSettings.partySize,
+      shareText: enhancedShareText,
+      planSummary: props.selectedPlanSummary.nodePreview,
+      receiptIds: collectReceiptIds(result),
+    });
+    if (artifactPreview.type === "voucher") {
+      enhancedShareText = appendVoucherShareLine(enhancedShareText);
+    }
 
     setTrace(result);
     setShareText(enhancedShareText);
@@ -210,206 +421,50 @@ export function ExecutionPanel({
     }
   }
 
-  return (
-    <section className="overflow-hidden rounded-2xl border border-black/6 bg-white shadow-soft">
-      <div className="border-b border-black/5 bg-meituan-gray/40 px-4 py-3">
-        <p className="text-[11px] font-bold text-black/40">即将执行</p>
-        <p className="mt-0.5 text-base font-extrabold text-meituan-ink">{currentPlanLabel}</p>
-        <p className="mt-1 text-[11px] font-medium leading-5 text-black/55">{selectedPlanSummary.travelSummary}</p>
-        {selectedPlanSummary.planNote ? (
-          <p className="mt-1 text-[11px] leading-5 text-amber-900">{selectedPlanSummary.planNote}</p>
-        ) : null}
-      </div>
+  function handleCancelQueue() {
+    setQueueCancelled(true);
+    window.setTimeout(() => {
+      props.onClose?.();
+    }, 600);
+  }
 
-      <div className="p-4">
-      {executionStatus === "idle" ? (
-        <div>
-          <h2 className="text-lg font-extrabold text-meituan-ink">确认后帮你搞定</h2>
-          <p className="mt-1 text-sm text-black/55">会依次完成订座、路线衔接，并生成可转发的安排。</p>
+  return {
+    executionStatus,
+    runningStep,
+    trace,
+    shareText,
+    copied,
+    sharePreviewOpen,
+    queueCancelled,
+    handleExecute,
+    handleCopy,
+    handleCancelQueue,
+    setSharePreviewOpen,
+  };
+}
 
-          <ul className="mt-4 space-y-2">
-            {idleActions.map((action) => (
-              <li key={action.id} className="flex items-center gap-2.5 rounded-xl bg-meituan-gray/70 px-3 py-2.5 text-sm text-black/70">
-                <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-meituan-yellow text-[10px] font-bold text-meituan-ink">✓</span>
-                {action.label}
-              </li>
-            ))}
-          </ul>
-
-          <button
-            type="button"
-            data-testid="execution-start-button"
-            className="mt-5 w-full rounded-2xl bg-meituan-yellow px-4 py-3.5 text-sm font-extrabold text-meituan-ink shadow-md transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!routePlan}
-            onClick={handleExecute}
-          >
-            确认执行
-          </button>
-        </div>
-      ) : null}
-
-      {executionStatus === "running" ? (
-        <div>
-          <div className="flex items-start gap-3">
-            <div className="relative mt-0.5 h-10 w-10 shrink-0">
-              <div className="absolute inset-0 rounded-full border-2 border-meituan-yellow/30" />
-              <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-meituan-yellow" />
-            </div>
-            <div>
-              <h2 className="text-lg font-extrabold text-meituan-ink">正在处理中</h2>
-              <p className="mt-1 text-sm text-black/55">订座和路线安排进行中，请稍候。</p>
-            </div>
-          </div>
-
-          {runningHints.map((hint) => (
-            <p key={hint} className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold leading-5 text-amber-900">
-              {hint}
-            </p>
-          ))}
-
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/8">
-            <div className="h-full rounded-full bg-meituan-yellow transition-all duration-300" style={{ width: `${progressPercent}%` }} />
-          </div>
-
-          <ul className="mt-4 space-y-2">
-            {runningSteps.map((label, index) => {
-              const active = index === runningStep;
-              const done = index < runningStep;
-              return (
-                <li
-                  key={label}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-                    active ? "bg-meituan-yellow/15 font-bold text-meituan-ink" : done ? "text-black/45" : "text-black/30"
-                  }`}
-                >
-                  <span
-                    className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
-                      done ? "bg-emerald-500 text-white" : active ? "bg-meituan-yellow text-meituan-ink" : "bg-black/8 text-black/35"
-                    }`}
-                  >
-                    {done ? "✓" : index + 1}
-                  </span>
-                  {label}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
-
-      {executionStatus === "done" ? (
-        <div data-testid="execution-done">
-          <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white">
-            <div className="flex items-center gap-3 px-4 py-4">
-              <span className="grid h-10 w-10 place-items-center rounded-full bg-emerald-500 text-lg font-bold text-white shadow-sm">✓</span>
-              <div>
-                <h2 className="text-lg font-extrabold text-meituan-ink">安排已完成</h2>
-                <p className="mt-0.5 text-xs text-black/50">订座与路线已就绪，出发前可直接使用</p>
-              </div>
-            </div>
-            <ul className="space-y-1.5 border-t border-emerald-100 px-4 py-3">
-              {doneSummary.map((line) => (
-                <li key={line} className="flex items-start gap-2 text-sm font-semibold text-emerald-900">
-                  <span className="mt-0.5 text-emerald-600">✓</span>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {bookingVoucher ? <BookingVoucherCard voucher={bookingVoucher} /> : null}
-
-          {shareText ? (
-            <div className="mt-4 rounded-2xl border border-meituan-yellow/30 bg-yellow-50/80 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-extrabold text-black/80">发给同行人</p>
-                <button
-                  type="button"
-                  className="rounded-lg bg-meituan-yellow px-3 py-1.5 text-xs font-bold text-meituan-ink hover:brightness-95"
-                  onClick={handleCopy}
-                >
-                  {copied ? "已复制" : "复制文案"}
-                </button>
-              </div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-black/70">{shareText}</p>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="mt-4 rounded-xl border border-black/6 bg-meituan-gray/40">
-        <button
-          type="button"
-          data-testid="execution-trace-toggle"
-          className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left"
-          onClick={() => setTraceOpen((open) => !open)}
-          aria-expanded={traceOpen}
-        >
-          <span>
-            <span className="block text-xs font-bold text-black/45">技术细节</span>
-            <span className="mt-0.5 block text-[11px] leading-5 text-black/40">{traceFoldSummary}</span>
-            {trace.length ? (
-              <span className="mt-0.5 inline-block text-[10px] font-semibold text-black/35">{completedTraceCount} 步已完成</span>
-            ) : null}
-          </span>
-          <span className="shrink-0 text-[11px] font-bold text-black/40">{traceOpen ? "收起" : "展开"}</span>
-        </button>
-
-        {traceOpen ? (
-          <div className="max-h-[240px] space-y-2 overflow-y-auto px-4 pb-4">
-            {trace.length ? (
-              trace.map((step) => {
-                const stepReceiptIds = extractReceiptIds(step);
-                return (
-                  <div key={step.stepId} className="rounded-lg bg-white p-3 text-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-extrabold text-black/80">{step.toolName}</p>
-                        <p className="text-xs font-bold uppercase text-black/38">
-                          {step.phase} · {step.status}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${
-                          step.status === "success"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : step.status === "failed"
-                              ? "bg-rose-50 text-rose-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {step.status}
-                      </span>
-                    </div>
-                    <div className="mt-2 space-y-1 text-xs text-black/62">
-                      <div className="rounded-md bg-meituan-gray px-3 py-2">
-                        <span className="font-bold text-black/70">Request：</span>
-                        {summarizePayload(step.request)}
-                      </div>
-                      <div className="rounded-md bg-meituan-gray px-3 py-2">
-                        <span className="font-bold text-black/70">Response：</span>
-                        {step.error?.message ?? summarizePayload(step.response)}
-                      </div>
-                    </div>
-                    {stepReceiptIds.length ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {stepReceiptIds.map((id) => (
-                          <span key={`${step.stepId}-${id}`} className="rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-bold text-black/65">
-                            {id}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            ) : (
-              <p className="rounded-lg bg-white px-3 py-3 text-xs text-black/45">执行完成后可查看后台处理记录。</p>
-            )}
-          </div>
-        ) : null}
-      </div>
-      </div>
-    </section>
+export function ExecutionPanel(props: ExecutionPanelProps) {
+  const state = useExecutionPanelState(props);
+  const body = (
+    <ExecutionPanelBody
+      {...props}
+      executionStatus={state.executionStatus}
+      runningStep={state.runningStep}
+      trace={state.trace}
+      shareText={state.shareText}
+      copied={state.copied}
+      sharePreviewOpen={state.sharePreviewOpen}
+      queueCancelled={state.queueCancelled}
+      onExecute={state.handleExecute}
+      onCopy={state.handleCopy}
+      onOpenSharePreview={() => state.setSharePreviewOpen(true)}
+      onCancelQueue={state.handleCancelQueue}
+    />
   );
+
+  if (props.variant === "modal") {
+    return body;
+  }
+
+  return <section className="overflow-hidden rounded-2xl border border-black/6 bg-white shadow-soft">{body}</section>;
 }

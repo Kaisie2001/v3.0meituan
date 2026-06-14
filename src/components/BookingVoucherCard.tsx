@@ -1,6 +1,7 @@
 "use client";
 
-import { MockQrCode, buildQrSeed } from "@/components/MockQrCode";
+import { MockQrCode } from "@/components/MockQrCode";
+import { buildQrSeed } from "@/lib/qrSeed";
 import { buildTravelSettingsSummary, getDateLabel, type TravelSettings } from "@/lib/preferenceSummary";
 import type { RoutePlan, RouteSlot } from "@/lib/types";
 import type { SelectedPlanType } from "@/lib/executionContext";

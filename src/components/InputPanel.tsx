@@ -6,6 +6,8 @@ import { defaultInputs } from "@/lib/parseIntent";
 
 const SCENARIO_CHIP_TEST_IDS: Partial<Record<DemoScenarioId, string>> = {
   friends: "scenario-chip-friendsEvening",
+  family: "scenario-chip-familyWeekend",
+  date: "scenario-chip-dateEvening",
   errands: "scenario-chip-errandAfternoon",
   work: "scenario-chip-workAfternoon",
 };
