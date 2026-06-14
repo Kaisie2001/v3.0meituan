@@ -217,10 +217,57 @@ function buildRouteThreeSteps(slots: RouteSlot[], parseResult: ParseResult): Rou
 
 function buildCompactGuidanceLines(guidance: RouteGuidanceSummary) {
   const lines: string[] = [];
-  if (guidance.steps[0]) lines.push(guidance.steps[0]);
+  for (const step of guidance.steps) {
+    if (step && !lines.includes(step)) lines.push(step);
+    if (lines.length >= 3) break;
+  }
   const hint = guidance.timeHint?.split(/[。；]/)[0]?.trim();
-  if (hint && lines.length < 2 && !lines.includes(hint)) lines.push(hint);
-  return lines.slice(0, 2);
+  if (hint && !lines.includes(hint) && lines.length < 3) lines.push(hint);
+  const pref = guidance.preferenceHint?.trim();
+  if (pref && !lines.includes(pref) && lines.length < 3) lines.push(pref);
+  return lines.slice(0, 3);
+}
+
+function extractPriorityLabel(settingImpactSummary?: string, travelSettingsSummary?: string) {
+  if (settingImpactSummary) {
+    const match = settingImpactSummary.match(/「(.+?)」/);
+    if (match?.[1]) return `${match[1]}优先`;
+  }
+  if (travelSettingsSummary) {
+    const parts = travelSettingsSummary.split(" · ").filter(Boolean);
+    return parts[parts.length - 1] ?? "综合推荐";
+  }
+  return "综合推荐";
+}
+
+function buildPlanHeadline(
+  parseResult: ParseResult,
+  stepCount: number,
+  settingImpactSummary?: string,
+  travelSettingsSummary?: string,
+) {
+  const persona = getPersonaConfig(parseResult).label;
+  const stations = stepCount > 0 ? `${stepCount}站` : "待排";
+  const priority = extractPriorityLabel(settingImpactSummary, travelSettingsSummary);
+  return `${persona} · ${stations} · ${priority}`;
+}
+
+function buildContextChips(travelSettingsSummary?: string, transportLabel?: string) {
+  const parts = (travelSettingsSummary ?? "").split(" · ").filter(Boolean);
+  const timePart = parts.slice(0, 2).join(" · ");
+  const chips = [timePart, transportLabel].filter(Boolean);
+  return chips;
+}
+
+function pickPrimaryRisk(
+  summary: CurrentPlanSummary,
+  routeBasis: RouteBasisSummary,
+  slots: RouteSlot[],
+) {
+  if (summary.riskSummary?.trim()) return summary.riskSummary;
+  if (routeBasis.dynamicHint?.trim()) return routeBasis.dynamicHint;
+  const slotRisk = slots.flatMap((slot) => slot.riskNotes ?? []).find((note) => note?.trim());
+  return slotRisk?.trim() ?? null;
 }
 
 function RouteBasisBlock({ basis }: { basis: RouteBasisSummary }) {
@@ -281,18 +328,14 @@ function CollapseSection({
 
 function CompactGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) {
   const lines = buildCompactGuidanceLines(guidance);
+  if (!lines.length) return null;
 
   return (
-    <div className="rounded-xl border border-black/6 bg-white px-3 py-2.5 shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-extrabold text-meituan-ink">怎么去</p>
-        <span className="shrink-0 rounded-full bg-meituan-yellow/70 px-2 py-0.5 text-[10px] font-bold text-meituan-ink">
-          {guidance.transportLabel}
-        </span>
-      </div>
-      <ul className="mt-1.5 space-y-1">
+    <div className="rounded-xl bg-meituan-gray/50 px-3 py-2">
+      <p className="text-[10px] font-bold text-black/40">怎么去 · {guidance.transportLabel}</p>
+      <ul className="mt-1 space-y-0.5">
         {lines.map((line) => (
-          <li key={line} className="text-[11px] font-medium leading-5 text-black/65">
+          <li key={line} className="text-[11px] leading-5 text-black/62">
             {line}
           </li>
         ))}
@@ -303,22 +346,32 @@ function CompactGuidanceBlock({ guidance }: { guidance: RouteGuidanceSummary }) 
 
 function RouteThreeStepsBlock({ steps }: { steps: RouteStepPreview[] }) {
   return (
-    <div data-testid="route-step-list" className="space-y-1.5">
-      {steps.map((step, index) => (
-        <div
-          key={`${step.label}-${step.name}-${index}`}
-          className="flex items-center gap-2.5 rounded-xl border border-black/5 bg-white px-2.5 py-2 shadow-sm"
-        >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-meituan-yellow text-[11px] font-extrabold text-meituan-ink">
-            {index + 1}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold text-black/45">{step.label}</p>
-            <p className="truncate text-xs font-extrabold text-meituan-ink">{step.name}</p>
-            {step.timeRange ? <p className="text-[10px] font-semibold text-black/40">{step.timeRange}</p> : null}
+    <div data-testid="route-step-list" className="relative">
+      {steps.map((step, index) => {
+        const isLast = index === steps.length - 1;
+        return (
+          <div key={`${step.label}-${step.name}-${index}`} className="relative flex gap-3 pb-3 last:pb-0">
+            {!isLast ? (
+              <span
+                className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-meituan-yellow/45"
+                aria-hidden="true"
+              />
+            ) : null}
+            <span className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-meituan-yellow text-[11px] font-extrabold text-meituan-ink ring-2 ring-white">
+              {index + 1}
+            </span>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="truncate text-[13px] font-extrabold leading-snug text-meituan-ink">{step.name}</p>
+                {step.timeRange ? (
+                  <p className="shrink-0 text-[10px] font-semibold tabular-nums text-black/40">{step.timeRange}</p>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-[10px] font-semibold text-black/45">{step.label}</p>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -364,31 +417,34 @@ function MainTabContent({
   onViewFallback: () => void;
   onSelectMainPlan: () => void;
 }) {
-  const constraintText = travelSettingsSummary ?? "今天 14:00 · 3小时 · 智能推荐";
   const routeSteps = buildRouteThreeSteps(summary.slots, parseResult);
+  const planHeadline = buildPlanHeadline(parseResult, routeSteps.length, settingImpactSummary, travelSettingsSummary);
   const whyNowLine = routeBasis.planIntro ?? summary.reasons[0] ?? summary.strategyNote;
-  const settingsLine = [constraintText, settingImpactSummary].filter(Boolean).join(" · ");
+  const contextChips = buildContextChips(travelSettingsSummary, guidance.transportLabel);
+  const primaryRisk = pickPrimaryRisk(summary, routeBasis, summary.slots);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pb-2">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pb-2">
         {switchFeedback ? (
           <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{switchFeedback}</p>
         ) : null}
 
-        <div className="overflow-hidden rounded-2xl border border-meituan-yellow/30 bg-gradient-to-br from-meituan-yellow/12 via-white to-white shadow-sm">
-          <div className="px-3.5 py-3">
+        <div className="overflow-hidden rounded-2xl border border-meituan-yellow/35 bg-white">
+          <div className="border-l-[3px] border-meituan-yellow px-3 py-2.5">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-bold text-black/45">{summary.isFallback ? "当前方案" : "推荐方案"}</p>
-                <p className="mt-0.5 text-base font-extrabold leading-snug text-meituan-ink">{summary.planTitle}</p>
+                <p className="text-[15px] font-extrabold leading-snug tracking-tight text-meituan-ink">{planHeadline}</p>
+                {whyNowLine ? (
+                  <p className="mt-1.5 text-[12px] leading-5 text-black/62">{whyNowLine}</p>
+                ) : null}
               </div>
               {summary.isFallback ? (
                 <button
                   type="button"
                   data-testid="restore-main-plan-button"
                   onClick={onSelectMainPlan}
-                  className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+                  className="shrink-0 rounded-lg border border-black/10 bg-white px-2 py-1 text-[10px] font-bold text-black/62 hover:bg-black/5"
                 >
                   恢复主方案
                 </button>
@@ -396,46 +452,55 @@ function MainTabContent({
                 <button
                   type="button"
                   onClick={() => onOpenTravelSettings?.()}
-                  className="shrink-0 rounded-lg border border-black/10 bg-white px-2.5 py-1 text-[11px] font-bold text-black/62 hover:bg-black/5"
+                  className="shrink-0 rounded-lg border border-black/10 bg-meituan-gray/80 px-2 py-1 text-[10px] font-bold text-black/55 hover:bg-black/5"
                 >
                   偏好
                 </button>
               ) : null}
             </div>
 
-            {whyNowLine ? (
-              <p className="mt-2 text-[11px] leading-5 text-black/62">{whyNowLine}</p>
-            ) : null}
-
             {summary.isFallback && summary.triggerNote ? (
               <p className="mt-1.5 text-[11px] font-semibold leading-5 text-amber-900">{summary.triggerNote}</p>
             ) : null}
 
-            <div className="mt-3 grid grid-cols-4 gap-1.5 text-center text-[10px] text-black/50">
-              <div className="rounded-xl bg-meituan-yellow/80 px-1 py-2">
-                <b className="block text-sm font-extrabold text-meituan-ink">{summary.overallScore}</b>
-                成行分
+            {contextChips.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {contextChips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="rounded-full bg-meituan-gray/80 px-2 py-0.5 text-[10px] font-semibold text-black/55"
+                  >
+                    {chip}
+                  </span>
+                ))}
               </div>
-              <div className="rounded-xl bg-white/80 px-1 py-2">
-                <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalMinutes}</b>
-                总耗时
-              </div>
-              <div className="rounded-xl bg-white/80 px-1 py-2">
-                <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalBudget}</b>
-                预算
-              </div>
-              <div className="rounded-xl bg-white/80 px-1 py-2">
-                <b className="block text-sm font-extrabold text-meituan-ink">{summary.totalWaitMinutes}</b>
-                等待
-              </div>
+            ) : null}
+
+            {primaryRisk ? (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] leading-5 text-amber-950">
+                <span className="font-extrabold">主要风险 · </span>
+                {primaryRisk}
+              </p>
+            ) : null}
+
+            <div className="mt-2.5 flex gap-3 text-[11px] text-black/50">
+              <span>
+                等待 <b className="font-extrabold text-meituan-ink">{summary.totalWaitMinutes}</b> 分钟
+              </span>
+              <span className="text-black/20">|</span>
+              <span>
+                总耗时 <b className="font-extrabold text-meituan-ink">{summary.totalMinutes}</b> 分钟
+              </span>
+              <span className="text-black/20">|</span>
+              <span>
+                成行分 <b className="font-extrabold text-meituan-ink">{summary.overallScore}</b>
+              </span>
             </div>
           </div>
         </div>
 
-        <p className="truncate rounded-xl bg-meituan-gray/60 px-3 py-2 text-[11px] font-semibold text-black/55">{settingsLine}</p>
-
         <div>
-          <p className="mb-1.5 text-[11px] font-bold text-black/45">路线安排</p>
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-black/40">路线</p>
           <RouteThreeStepsBlock steps={routeSteps} />
         </div>
 
@@ -451,7 +516,7 @@ function MainTabContent({
           <button
             type="button"
             data-testid="confirm-execute-button"
-            className="flex-1 rounded-lg bg-meituan-yellow px-3 py-2.5 text-sm font-extrabold text-meituan-ink transition hover:brightness-95"
+            className="min-w-0 flex-[3] rounded-xl bg-meituan-yellow px-3 py-3 text-sm font-extrabold text-meituan-ink shadow-md transition hover:brightness-95 active:scale-[0.99]"
             onClick={() => onConfirmExecute?.()}
           >
             确认并执行
@@ -459,12 +524,15 @@ function MainTabContent({
           <button
             type="button"
             data-testid="view-fallback-button"
-            className="flex-1 rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm font-bold text-black/62 hover:bg-black/5"
+            className="min-w-0 flex-[2] rounded-xl border border-black/10 bg-white px-3 py-3 text-sm font-bold text-black/58 transition hover:bg-black/[0.02]"
             onClick={summary.isFallback ? onSelectMainPlan : onViewFallback}
           >
             {summary.isFallback ? "恢复主方案" : "查看备选方案"}
           </button>
         </div>
+        <p className="mt-1.5 text-center text-[10px] leading-4 text-black/40">
+          将模拟订座、路线衔接，并生成可转发行程单
+        </p>
       </div>
     </div>
   );
