@@ -1,4 +1,7 @@
 export type PoiCategory = "cafe" | "restaurant" | "mall" | "activity";
+export type ExecutionCapability = "queue" | "reservation" | "voucher" | "share";
+export type PreferredExecution = ExecutionCapability;
+export type PoiBookingStatus = "available" | "limited" | "full";
 export type CrowdLevel = "low" | "medium" | "high";
 export type GoabilityLevel = "green" | "yellow" | "red" | "gray";
 
@@ -33,6 +36,10 @@ export type Poi = {
   dealAvailable: boolean;
   routeEtaMinutes: number;
   nearMetro: boolean;
+  executionCapabilities?: ExecutionCapability[];
+  preferredExecution?: PreferredExecution;
+  bookingStatus?: PoiBookingStatus;
+  requiresVoucher?: boolean;
 };
 
 export type Intent = {

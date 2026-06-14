@@ -50,10 +50,11 @@ const DEMO_EXECUTION_NOTE =
   "当前为 demo 模拟执行，真实产品可接入美团/点评预订、排队、购票与地图导航服务。";
 
 const ARTIFACT_DISPLAY_ORDER: Record<ExecutionArtifact["type"], number> = {
-  queue: 0,
-  voucher: 1,
-  reservation: 2,
-  share: 3,
+  scheduledQueue: 0,
+  queue: 1,
+  voucher: 2,
+  reservation: 3,
+  share: 4,
 };
 
 function sortArtifactsForDisplay(artifacts: ExecutionArtifact[]) {

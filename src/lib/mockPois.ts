@@ -115,6 +115,7 @@ export const mockPois: Poi[] = [
     dealAvailable: true,
     routeEtaMinutes: 15,
     nearMetro: true,
+    executionCapabilities: ["queue", "reservation"],
   },
   {
     id: "mild-pot",
@@ -138,6 +139,9 @@ export const mockPois: Poi[] = [
     dealAvailable: false,
     routeEtaMinutes: 19,
     nearMetro: false,
+    executionCapabilities: ["queue", "reservation"],
+    bookingStatus: "limited",
+    preferredExecution: "queue",
   },
   {
     id: "spicy-town",
@@ -253,6 +257,8 @@ export const mockPois: Poi[] = [
     dealAvailable: true,
     routeEtaMinutes: 12,
     nearMetro: false,
+    executionCapabilities: ["queue", "reservation"],
+    preferredExecution: "reservation",
   },
   {
     id: "workhub-cafe",
@@ -276,6 +282,8 @@ export const mockPois: Poi[] = [
     dealAvailable: true,
     routeEtaMinutes: 18,
     nearMetro: false,
+    executionCapabilities: ["reservation"],
+    preferredExecution: "reservation",
   },
   {
     id: "gather-tea",
@@ -345,6 +353,9 @@ export const mockPois: Poi[] = [
     dealAvailable: true,
     routeEtaMinutes: 11,
     nearMetro: true,
+    executionCapabilities: ["voucher"],
+    preferredExecution: "voucher",
+    requiresVoucher: true,
   },
   {
     id: "family-kitchen",
@@ -368,6 +379,8 @@ export const mockPois: Poi[] = [
     dealAvailable: true,
     routeEtaMinutes: 13,
     nearMetro: false,
+    executionCapabilities: ["queue", "reservation"],
+    preferredExecution: "reservation",
   },
   {
     id: "art-walk",
@@ -391,6 +404,9 @@ export const mockPois: Poi[] = [
     dealAvailable: false,
     routeEtaMinutes: 15,
     nearMetro: false,
+    executionCapabilities: ["voucher"],
+    preferredExecution: "voucher",
+    requiresVoucher: true,
   },
   {
     id: "mood-dine",
@@ -414,6 +430,9 @@ export const mockPois: Poi[] = [
     dealAvailable: true,
     routeEtaMinutes: 10,
     nearMetro: true,
+    executionCapabilities: ["queue", "reservation"],
+    bookingStatus: "limited",
+    preferredExecution: "queue",
   },
   {
     id: "sweet-stop",

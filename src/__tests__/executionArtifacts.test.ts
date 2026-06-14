@@ -66,12 +66,16 @@ function makePlan(slots: RouteSlot[]): RoutePlan {
   };
 }
 
-function makeSlot(poi: ScoredPoi, slotType: RouteSlot["slotType"] = "food"): RouteSlot {
+function makeSlot(
+  poi: ScoredPoi,
+  slotType: RouteSlot["slotType"] = "food",
+  times?: { startTime?: string; endTime?: string },
+): RouteSlot {
   return {
     slotType,
     poi,
-    startTime: "18:00",
-    endTime: "19:00",
+    startTime: times?.startTime ?? "18:00",
+    endTime: times?.endTime ?? "19:00",
     etaMinutes: 12,
     waitMinutes: 5,
     rationaleNotes: [],
@@ -110,13 +114,17 @@ function assertArtifactsValid(artifacts: ExecutionArtifact[]) {
 }
 
 describe("executionArtifacts", () => {
-  it("returns an array with queue and share for restaurant queue priority", () => {
+  it("returns an array with queue and share for restaurant queue priority when arrival is soon", () => {
     const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
-        makeSlot(makePoi({ id: "r1", name: "Hotpot Garden", queueMinutes: 20, riskTags: ["排队长"] })),
+        makeSlot(
+          makePoi({ id: "r1", name: "Hotpot Garden", queueMinutes: 20, riskTags: ["排队长"] }),
+          "food",
+          { startTime: "18:00", endTime: "19:00" },
+        ),
       ]),
-      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue" },
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue", startTime: "17:35" },
     });
 
     assertArtifactsValid(artifacts);
@@ -134,6 +142,50 @@ describe("executionArtifacts", () => {
       expect(queue.statusSteps[1]?.state).toBe("active");
       expect(JSON.stringify(queue)).not.toContain("已模拟预约");
     }
+  });
+
+  it("returns scheduledQueue and share for restaurant queue priority when arrival is later", () => {
+    const artifacts = buildExecutionArtifacts({
+      ...baseParams,
+      routePlan: makePlan([
+        makeSlot(
+          makePoi({ id: "r1", name: "Hotpot Garden", queueMinutes: 20, riskTags: ["排队长"] }),
+          "food",
+          { startTime: "18:30", endTime: "19:30" },
+        ),
+      ]),
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue", startTime: "14:00" },
+    });
+
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["scheduledQueue", "share"]);
+
+    const scheduled = artifacts.find((artifact) => artifact.type === "scheduledQueue");
+    if (scheduled?.type === "scheduledQueue") {
+      expect(scheduled.title).toBe("已设置自动取号");
+      expect(scheduled.plannedArrivalTime).toMatch(/^\d{2}:\d{2}$/);
+      expect(scheduled.scheduledQueueTime).toMatch(/^\d{2}:\d{2}$/);
+      expect(scheduled.triggerReason).toMatch(/到店前约/);
+      expect(scheduled.statusSteps[1]?.state).toBe("active");
+      expect(scheduled.note).toContain("Agent");
+    }
+  });
+
+  it("returns queue and share for restaurant queue priority when arrival is within 30 minutes", () => {
+    const artifacts = buildExecutionArtifacts({
+      ...baseParams,
+      routePlan: makePlan([
+        makeSlot(
+          makePoi({ id: "r1b", name: "Hotpot Garden", queueMinutes: 20, riskTags: ["排队长"] }),
+          "food",
+          { startTime: "18:25", endTime: "19:25" },
+        ),
+      ]),
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue", startTime: "18:00" },
+    });
+
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["queue", "share"]);
   });
 
   it("returns reservation and share for restaurant without strong queue context", () => {
@@ -186,9 +238,10 @@ describe("executionArtifacts", () => {
             reservationAvailable: true,
           }),
           "food",
+          { startTime: "18:20", endTime: "19:20" },
         ),
       ]),
-      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue", partySize: 4 },
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue", partySize: 4, startTime: "17:50" },
       partySize: 4,
     });
 
@@ -272,7 +325,30 @@ describe("executionArtifacts", () => {
     });
 
     assertArtifactsValid(artifacts);
-    expect(typesOf(artifacts).every((type) => ["queue", "reservation", "voucher", "share"].includes(type))).toBe(true);
+    expect(typesOf(artifacts).every((type) =>
+      ["queue", "scheduledQueue", "reservation", "voucher", "share"].includes(type),
+    )).toBe(true);
+  });
+
+  it("handles missing time fields without errors", () => {
+    const artifacts = buildExecutionArtifacts({
+      ...baseParams,
+      routePlan: makePlan([
+        makeSlot(
+          makePoi({
+            id: "r-missing-time",
+            name: "Late Bistro",
+            queueMinutes: 12,
+          }),
+          "food",
+          { startTime: "", endTime: "" },
+        ),
+      ]),
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "queue", startTime: "" },
+    });
+
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts).some((type) => type === "queue" || type === "scheduledQueue")).toBe(true);
   });
 
   it("detects voucher signals from exhibition tags", () => {
@@ -280,14 +356,15 @@ describe("executionArtifacts", () => {
     expect(executionArtifactRules.isVoucherPoi(poi)).toBe(true);
   });
 
-  it("uses route action label for voucher completion", () => {
+  it("uses route action label for voucher and scheduled queue completion", () => {
     expect(getExecutionArtifactPrimaryActionLabel("voucher")).toBe("查看路线");
     expect(getExecutionArtifactPrimaryActionLabel("queue")).toBe("查看路线");
+    expect(getExecutionArtifactPrimaryActionLabel("scheduledQueue")).toBe("查看路线");
     expect(getExecutionArtifactPrimaryActionLabel("reservation")).toBe("查看路线");
     expect(getExecutionArtifactPrimaryActionLabel("share")).toBe("查看最终行程");
   });
 
-  it("builds voucher without restaurant artifact when meal priority is low", () => {
+  it("builds voucher for kid-zone activity nodes", () => {
     const artifacts = buildExecutionArtifacts({
       ...baseParams,
       routePlan: makePlan([
@@ -298,16 +375,10 @@ describe("executionArtifacts", () => {
             category: "activity",
             reviewPositive: ["入场流程清楚"],
             queueMinutes: 5,
+            executionCapabilities: ["voucher"],
+            requiresVoucher: true,
           }),
           "activity",
-        ),
-        makeSlot(
-          makePoi({
-            id: "mood-dine",
-            name: "Mood Dine 暖光小馆",
-            queueMinutes: 14,
-          }),
-          "food",
         ),
       ]),
       travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "distance", partySize: 3 },
@@ -317,6 +388,89 @@ describe("executionArtifacts", () => {
     assertArtifactsValid(artifacts);
     expect(typesOf(artifacts)).toEqual(["voucher", "share"]);
     expect(artifacts.find((artifact) => artifact.type === "voucher")?.venueName).toBe("Kid Zone 奇趣亲子馆");
+  });
+
+  it("builds queue for restaurant when queueMinutes >= 10 regardless of route priority", () => {
+    const artifacts = buildExecutionArtifacts({
+      ...baseParams,
+      routePlan: makePlan([
+        makeSlot(
+          makePoi({
+            id: "mood-dine",
+            name: "Mood Dine 暖光小馆",
+            queueMinutes: 14,
+            executionCapabilities: ["queue", "reservation"],
+            bookingStatus: "limited",
+          }),
+          "food",
+          { startTime: "18:10", endTime: "19:10" },
+        ),
+      ]),
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "distance", partySize: 3, startTime: "17:45" },
+      partySize: 3,
+    });
+
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["queue", "share"]);
+  });
+
+  it("builds scheduledQueue for restaurant when arrival is more than 45 minutes away", () => {
+    const artifacts = buildExecutionArtifacts({
+      ...baseParams,
+      routePlan: makePlan([
+        makeSlot(
+          makePoi({
+            id: "mood-dine",
+            name: "Mood Dine 暖光小馆",
+            queueMinutes: 14,
+            executionCapabilities: ["queue", "reservation"],
+            bookingStatus: "limited",
+          }),
+          "food",
+          { startTime: "18:30", endTime: "19:30" },
+        ),
+      ]),
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "distance", partySize: 3, startTime: "14:00" },
+      partySize: 3,
+    });
+
+    assertArtifactsValid(artifacts);
+    expect(typesOf(artifacts)).toEqual(["scheduledQueue", "share"]);
+  });
+
+  it("builds voucher plus dining artifacts when plan has activity and restaurant", () => {
+    const artifacts = buildExecutionArtifacts({
+      ...baseParams,
+      routePlan: makePlan([
+        makeSlot(
+          makePoi({
+            id: "kid-zone",
+            name: "Kid Zone 奇趣亲子馆",
+            category: "activity",
+            executionCapabilities: ["voucher"],
+            requiresVoucher: true,
+          }),
+          "activity",
+        ),
+        makeSlot(
+          makePoi({
+            id: "mood-dine",
+            name: "Mood Dine 暖光小馆",
+            queueMinutes: 14,
+            executionCapabilities: ["queue", "reservation"],
+            bookingStatus: "limited",
+          }),
+          "food",
+          { startTime: "18:20", endTime: "19:20" },
+        ),
+      ]),
+      travelSettings: { ...DEFAULT_TRAVEL_SETTINGS, routePriority: "distance", partySize: 3, startTime: "17:50" },
+      partySize: 3,
+    });
+
+    assertArtifactsValid(artifacts);
+    expect(artifacts.length).toBeGreaterThanOrEqual(3);
+    expect(typesOf(artifacts)).toEqual(["voucher", "queue", "share"]);
   });
 
   it("builds reservation and share for work-like cafe food slot", () => {
@@ -373,15 +527,16 @@ describe("executionArtifacts", () => {
 
   it("classifies golden scenarios across multiple artifact types", () => {
     const expectations: Record<string, ExecutionArtifact["type"][]> = {
-      friendsEvening: ["queue", "reservation", "voucher"],
-      dateEvening: ["queue", "reservation"],
-      familyWeekend: ["share", "voucher"],
-      workAfternoon: ["reservation", "share"],
-      errandAfternoon: ["queue", "reservation"],
-      rushTaxi: ["queue", "reservation"],
+      friendsEvening: ["queue", "scheduledQueue", "reservation", "voucher"],
+      dateEvening: ["queue", "scheduledQueue", "reservation"],
+      familyWeekend: ["queue", "scheduledQueue", "reservation", "voucher", "share"],
+      workAfternoon: ["queue", "scheduledQueue", "reservation", "share"],
+      errandAfternoon: ["queue", "scheduledQueue", "reservation"],
+      rushTaxi: ["queue", "scheduledQueue", "reservation"],
     };
 
     const allTypes = new Set<ExecutionArtifact["type"]>();
+    const scenariosWithQueue = new Set<string>();
 
     for (const fixture of scenarioFixtures) {
       const agent = runAgent(fixture.goal, fixture.wechat, fixture.seed);
@@ -404,6 +559,7 @@ describe("executionArtifacts", () => {
 
       const types = typesOf(artifacts);
       for (const type of types) allTypes.add(type);
+      if (types.includes("queue") || types.includes("scheduledQueue")) scenariosWithQueue.add(fixture.id);
 
       const allowed = expectations[fixture.id];
       expect(allowed, fixture.id).toBeDefined();
@@ -413,10 +569,21 @@ describe("executionArtifacts", () => {
       if (fixture.id === "workAfternoon") {
         expect(types).not.toContain("voucher");
       }
+
+      if (fixture.id === "dateEvening") {
+        expect(types).not.toEqual(["share"]);
+      }
+
+      if (fixture.id === "rushTaxi") {
+        expect(types.some((type) => type === "queue" || type === "scheduledQueue" || type === "reservation")).toBe(
+          true,
+        );
+      }
     }
 
-    expect(allTypes.has("queue")).toBe(true);
+    expect(allTypes.has("queue") || allTypes.has("scheduledQueue")).toBe(true);
     expect(allTypes.has("reservation")).toBe(true);
     expect(allTypes.has("share")).toBe(true);
+    expect(scenariosWithQueue.size).toBeGreaterThan(1);
   });
 });
