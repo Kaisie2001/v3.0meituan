@@ -13,7 +13,7 @@ import { RouteTimeline } from "@/components/RouteTimeline";
 import { TripPersonaCard } from "@/components/TripPersonaCard";
 import { ClarifyModal } from "@/components/ClarifyModal";
 import { TravelSettingsSheet } from "@/components/TravelSettingsSheet";
-import { defaultInputs, parseInput } from "@/lib/parseIntent";
+import { defaultInputs } from "@/lib/parseIntent";
 import { runAgent, runAgentFromParseResult } from "@/lib/runAgent";
 import { applyParseOverrides } from "@/lib/parsers/applyOverrides";
 import { applyRoutePrefs } from "@/lib/parsers/applyRoutePrefs";
@@ -75,6 +75,7 @@ export default function Home() {
     selectedPlanType,
     selectedFallbackIndex,
     isPlanning,
+    executionStatus,
   } = flowState;
   const selectedPoiId = flowState.selectedPoiId ?? undefined;
 
