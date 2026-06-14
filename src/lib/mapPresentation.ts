@@ -22,7 +22,18 @@ export type MapPresentation = {
 
 export type SelectedPlanType = "main" | "fallback";
 
-function hasMapCoords(poi: ScoredPoi) {
+export const EMPTY_MAP_PRESENTATION: MapPresentation = {
+  visiblePois: [],
+  activeRoutePois: [],
+  activeRoutePoiIds: [],
+  routeSegments: [],
+  highlightedPoiIds: [],
+  dimmedPoiIds: [],
+  alternatePoiIds: [],
+  mapHint: MAP_DEMO_NOTE,
+};
+
+export function hasMapCoords(poi: ScoredPoi) {
   const hasLatLng = typeof poi.lat === "number" && typeof poi.lng === "number";
   const hasXY = typeof poi.x === "number" && typeof poi.y === "number";
   return hasLatLng || hasXY;
@@ -32,9 +43,13 @@ function poiText(poi: ScoredPoi) {
   return `${poi.name} ${poi.category} ${poi.sceneTags.join(" ")} ${poi.reasons?.join(" ") ?? ""}`;
 }
 
-function scorePoiForPersona(poi: ScoredPoi, persona: PersonaType) {
+function scorePoiForPersona(poi: ScoredPoi, persona: PersonaType, travelSettings?: TravelSettings) {
   const text = poiText(poi);
   let score = poi.goabilityScore ?? 0;
+
+  if (travelSettings?.transportMode === "walking" && poi.routeEtaMinutes <= 20) score += 2;
+  if (travelSettings?.transportMode === "transit" && poi.nearMetro) score += 2;
+  if (travelSettings?.routePriority === "queue" && poi.queueMinutes <= 12) score += 2;
 
   switch (persona) {
     case "friends":
@@ -75,8 +90,10 @@ function scorePoiForPersona(poi: ScoredPoi, persona: PersonaType) {
   return score;
 }
 
-function rankByPersona(pois: ScoredPoi[], persona: PersonaType) {
-  return [...pois].sort((a, b) => scorePoiForPersona(b, persona) - scorePoiForPersona(a, persona));
+function rankByPersona(pois: ScoredPoi[], persona: PersonaType, travelSettings?: TravelSettings) {
+  return [...pois].sort(
+    (a, b) => scorePoiForPersona(b, persona, travelSettings) - scorePoiForPersona(a, persona, travelSettings),
+  );
 }
 
 function uniquePois(pois: ScoredPoi[]) {
@@ -95,20 +112,33 @@ function extractSlotPois(plan?: ItineraryPlan) {
   return plan.slots.map((slot) => slot.poi).filter((poi): poi is ScoredPoi => Boolean(poi?.id));
 }
 
-function pickStartPoi(rankedPois: ScoredPoi[], persona: PersonaType, excludeIds: Set<string>) {
+function pickStartPoi(
+  rankedPois: ScoredPoi[],
+  persona: PersonaType,
+  excludeIds: Set<string>,
+  travelSettings?: TravelSettings,
+) {
   const candidates = rankByPersona(
     rankedPois.filter((poi) => hasMapCoords(poi) && !excludeIds.has(poi.id)),
     persona,
+    travelSettings,
   );
   const nearMetro = candidates.find((poi) => poi.nearMetro);
   return nearMetro ?? candidates[0];
 }
 
-function supplementRoutePois(rankedPois: ScoredPoi[], persona: PersonaType, existing: ScoredPoi[], targetCount: number) {
+function supplementRoutePois(
+  rankedPois: ScoredPoi[],
+  persona: PersonaType,
+  existing: ScoredPoi[],
+  targetCount: number,
+  travelSettings?: TravelSettings,
+) {
   const existingIds = new Set(existing.map((poi) => poi.id));
   const extras = rankByPersona(
     rankedPois.filter((poi) => hasMapCoords(poi) && !existingIds.has(poi.id)),
     persona,
+    travelSettings,
   );
   return uniquePois([...existing, ...extras]).slice(0, targetCount);
 }
@@ -130,8 +160,9 @@ function buildActiveRoutePois(params: {
   persona: PersonaType;
   selectedPlanType: SelectedPlanType;
   selectedFallbackIndex: number | null;
+  travelSettings?: TravelSettings;
 }) {
-  const { routePlan, rankedPois, persona, selectedPlanType, selectedFallbackIndex } = params;
+  const { routePlan, rankedPois, persona, selectedPlanType, selectedFallbackIndex, travelSettings } = params;
   const mainSlotPois = extractSlotPois(routePlan.mainPlan);
   const fallbackPlan =
     selectedPlanType === "fallback" && selectedFallbackIndex !== null
@@ -147,6 +178,7 @@ function buildActiveRoutePois(params: {
         : rankByPersona(
             rankedPois.filter((poi) => hasMapCoords(poi)),
             persona,
+            travelSettings,
           ).slice(0, 3);
 
   if (selectedPlanType === "fallback" && fallbackSlotPois.length) {
@@ -157,6 +189,7 @@ function buildActiveRoutePois(params: {
         rankByPersona(
           rankedPois.filter((poi) => hasMapCoords(poi) && !mainIds.has(poi.id)),
           persona,
+          travelSettings,
         )[0] ?? routePlan.fallbackRestaurant ?? routePlan.fallbackActivity;
       if (replacement) {
         corePois = uniquePois([...corePois.slice(0, 1), replacement, ...corePois.slice(1)]);
@@ -164,14 +197,14 @@ function buildActiveRoutePois(params: {
     }
   }
 
-  corePois = supplementRoutePois(rankedPois, persona, uniquePois(corePois), 3);
+  corePois = supplementRoutePois(rankedPois, persona, uniquePois(corePois), 3, travelSettings);
 
   const excludeForStart = new Set(corePois.map((poi) => poi.id));
-  const startPoi = pickStartPoi(rankedPois, persona, excludeForStart);
+  const startPoi = pickStartPoi(rankedPois, persona, excludeForStart, travelSettings);
   const routePois = uniquePois(startPoi ? [startPoi, ...corePois] : corePois).slice(0, 4);
 
   if (routePois.length < 3) {
-    return supplementRoutePois(rankedPois, persona, routePois, 3);
+    return supplementRoutePois(rankedPois, persona, routePois, 3, travelSettings);
   }
 
   return routePois;
@@ -240,8 +273,13 @@ export function buildMapPresentation(params: {
   selectedPoiId?: string;
   travelSettings?: TravelSettings;
 }): MapPresentation {
+  if (!params.routePlan || !params.rankedPois?.length) {
+    return { ...EMPTY_MAP_PRESENTATION };
+  }
+
   const rankedWithCoords = params.rankedPois.filter((poi) => hasMapCoords(poi));
   const persona = inferPersona(params.parseResult);
+  const { travelSettings } = params;
 
   const activeRoutePois = buildActiveRoutePois({
     routePlan: params.routePlan,
@@ -249,6 +287,7 @@ export function buildMapPresentation(params: {
     persona,
     selectedPlanType: params.selectedPlanType,
     selectedFallbackIndex: params.selectedFallbackIndex,
+    travelSettings,
   });
 
   const activeRoutePoiIds = activeRoutePois.map((poi) => poi.id);
@@ -260,6 +299,7 @@ export function buildMapPresentation(params: {
     persona,
     selectedPlanType: "main",
     selectedFallbackIndex: null,
+    travelSettings,
   });
   const mainRouteIds = mainRoutePois.map((poi) => poi.id);
 
@@ -270,7 +310,7 @@ export function buildMapPresentation(params: {
     selectedPlanType: params.selectedPlanType,
   });
 
-  const personaRanked = rankByPersona(rankedWithCoords, persona);
+  const personaRanked = rankByPersona(rankedWithCoords, persona, travelSettings);
   const highlightedPoiIds = uniquePois([
     ...activeRoutePois,
     ...personaRanked.slice(0, 4),
@@ -289,7 +329,10 @@ export function buildMapPresentation(params: {
   ]).slice(0, 14);
 
   if (visiblePois.length < 3) {
-    visiblePois = uniquePois([...visiblePois, ...rankByPersona(rankedWithCoords, persona)]).slice(0, Math.max(3, visiblePois.length));
+    visiblePois = uniquePois([...visiblePois, ...rankByPersona(rankedWithCoords, persona, travelSettings)]).slice(
+      0,
+      Math.max(3, visiblePois.length),
+    );
   }
 
   const dimmedPoiIds = visiblePois
