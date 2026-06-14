@@ -5,7 +5,7 @@ import { appendVoucherShareLine } from "@/components/BookingVoucherCard";
 import { ExecutionArtifactCard } from "@/components/ExecutionArtifactCard";
 import {
   buildExecutionArtifacts,
-  getExecutionArtifactPrimaryActionLabel,
+  type ExecutionArtifact,
 } from "@/lib/executionArtifacts";
 import {
   buildContextualIdleActions,
@@ -38,11 +38,8 @@ type ExecutionPanelBodyProps = ExecutionPanelProps & {
   trace: ExecutionTraceStep[];
   shareText: string;
   copied: boolean;
-  sharePreviewOpen: boolean;
-  queueCancelled: boolean;
   onExecute: () => void;
   onCopy: () => void;
-  onOpenSharePreview: () => void;
   onCancelQueue: () => void;
 };
 
@@ -51,6 +48,21 @@ type ExecutionStatus = "idle" | "running" | "done";
 const RUNNING_STEP_MS = 450;
 const DEMO_EXECUTION_NOTE =
   "当前为 demo 模拟执行，真实产品可接入美团/点评预订、排队、购票与地图导航服务。";
+
+const ARTIFACT_DISPLAY_ORDER: Record<ExecutionArtifact["type"], number> = {
+  queue: 0,
+  voucher: 1,
+  reservation: 2,
+  share: 3,
+};
+
+function sortArtifactsForDisplay(artifacts: ExecutionArtifact[]) {
+  return [...artifacts].sort((left, right) => ARTIFACT_DISPLAY_ORDER[left.type] - ARTIFACT_DISPLAY_ORDER[right.type]);
+}
+
+function toArtifactList(bundle: ReturnType<typeof buildExecutionArtifacts>) {
+  return sortArtifactsForDisplay([...bundle]);
+}
 
 function collectReceiptIds(trace: ExecutionTraceStep[]) {
   const ids: Record<string, string> = {};
@@ -117,11 +129,8 @@ export function ExecutionPanelBody({
   trace,
   shareText,
   copied,
-  sharePreviewOpen,
-  queueCancelled,
   onExecute,
   onCopy,
-  onOpenSharePreview,
   onCancelQueue,
 }: ExecutionPanelBodyProps) {
   const isModal = variant === "modal";
@@ -143,19 +152,21 @@ export function ExecutionPanelBody({
 
   const receiptIds = useMemo(() => collectReceiptIds(trace), [trace]);
 
-  const executionArtifact = useMemo(() => {
-    if (executionStatus !== "done" || !routePlan) return null;
-    return buildExecutionArtifacts({
-      routePlan,
-      travelSettings,
-      selectedPlanType,
-      selectedFallbackIndex,
-      currentPlanLabel,
-      partySize: intent.partySize ?? travelSettings.partySize,
-      shareText,
-      planSummary: selectedPlanSummary.nodePreview,
-      receiptIds,
-    });
+  const executionArtifacts = useMemo(() => {
+    if (executionStatus !== "done" || !routePlan) return [];
+    return toArtifactList(
+      buildExecutionArtifacts({
+        routePlan,
+        travelSettings,
+        selectedPlanType,
+        selectedFallbackIndex,
+        currentPlanLabel,
+        partySize: intent.partySize ?? travelSettings.partySize,
+        shareText,
+        planSummary: selectedPlanSummary.nodePreview,
+        receiptIds,
+      }),
+    );
   }, [
     executionStatus,
     routePlan,
@@ -168,10 +179,6 @@ export function ExecutionPanelBody({
     selectedPlanSummary.nodePreview,
     receiptIds,
   ]);
-
-  const primaryActionLabel = executionArtifact
-    ? getExecutionArtifactPrimaryActionLabel(executionArtifact.type)
-    : "查看最终行程";
 
   const progressPercent =
     executionStatus === "running"
@@ -278,12 +285,22 @@ export function ExecutionPanelBody({
               </p>
             </div>
 
-            {executionArtifact ? <ExecutionArtifactCard artifact={executionArtifact} compactTop /> : null}
-
-            {queueCancelled ? (
-              <p className="mt-2 rounded-lg bg-meituan-gray/50 px-2.5 py-2 text-xs text-black/55">
-                已取消排队（demo 模拟，未接入真实取消接口）
-              </p>
+            {executionArtifacts.length > 0 ? (
+              <div>
+                <p className="text-xs font-extrabold text-meituan-ink" data-testid="execution-results-heading">
+                  执行结果
+                </p>
+                <div className="mt-2 space-y-3" data-testid="execution-artifact-list">
+                  {executionArtifacts.map((artifact) => (
+                    <ExecutionArtifactCard
+                      key={artifact.id}
+                      artifact={artifact}
+                      compactTop
+                      onCancelQueue={artifact.type === "queue" ? onCancelQueue : undefined}
+                    />
+                  ))}
+                </div>
+              </div>
             ) : null}
 
             <div className="mt-4 flex flex-col gap-2">
@@ -293,19 +310,9 @@ export function ExecutionPanelBody({
                 className="w-full rounded-xl bg-meituan-yellow px-4 py-3 text-sm font-extrabold text-meituan-ink shadow-sm transition hover:brightness-95"
                 onClick={onViewFinalPlan ?? onClose}
               >
-                {primaryActionLabel}
+                查看路线
               </button>
-              {executionArtifact?.type === "queue" && !queueCancelled ? (
-                <button
-                  type="button"
-                  data-testid="execution-cancel-queue-button"
-                  className="w-full rounded-xl border border-black/10 bg-white px-4 py-2.5 text-sm font-bold text-black/65 transition hover:bg-meituan-gray/50"
-                  onClick={onCancelQueue}
-                >
-                  取消排队
-                </button>
-              ) : null}
-              {executionArtifact?.type !== "queue" && shareText ? (
+              {shareText ? (
                 <button
                   type="button"
                   data-testid="execution-copy-share-button"
@@ -326,20 +333,6 @@ export function ExecutionPanelBody({
             </div>
 
             <p className="mt-3 text-[10px] leading-4 text-black/38">{DEMO_EXECUTION_NOTE}</p>
-
-            {executionArtifact?.type === "share" && shareText && sharePreviewOpen ? (
-              <p className="mt-3 whitespace-pre-wrap rounded-lg bg-meituan-gray/50 px-3 py-2 text-xs leading-5 text-black/55">
-                {shareText}
-              </p>
-            ) : executionArtifact?.type === "share" && shareText ? (
-              <button
-                type="button"
-                className="mt-2 text-[11px] font-semibold text-black/40 underline-offset-2 hover:underline"
-                onClick={onOpenSharePreview}
-              >
-                预览分享文案
-              </button>
-            ) : null}
           </div>
         ) : null}
       </div>
@@ -353,8 +346,6 @@ export function useExecutionPanelState(props: ExecutionPanelProps) {
   const [trace, setTrace] = useState<ExecutionTraceStep[]>([]);
   const [shareText, setShareText] = useState("");
   const [copied, setCopied] = useState(false);
-  const [sharePreviewOpen, setSharePreviewOpen] = useState(false);
-  const [queueCancelled, setQueueCancelled] = useState(false);
 
   const { steps: runningSteps } = useMemo(
     () => buildContextualRunningSteps({ travelSettings: props.travelSettings, selectedPlanType: props.selectedPlanType }),
@@ -370,8 +361,6 @@ export function useExecutionPanelState(props: ExecutionPanelProps) {
     setTrace([]);
     setShareText("");
     setCopied(false);
-    setSharePreviewOpen(false);
-    setQueueCancelled(false);
 
     const executePromise = executePlan({ routePlan, intent, shareTo: "对方" });
 
@@ -403,7 +392,7 @@ export function useExecutionPanelState(props: ExecutionPanelProps) {
       planSummary: props.selectedPlanSummary.nodePreview,
       receiptIds: collectReceiptIds(result),
     });
-    if (artifactPreview.type === "voucher") {
+    if (artifactPreview.some((artifact) => artifact.type === "voucher")) {
       enhancedShareText = appendVoucherShareLine(enhancedShareText);
     }
 
@@ -422,10 +411,7 @@ export function useExecutionPanelState(props: ExecutionPanelProps) {
   }
 
   function handleCancelQueue() {
-    setQueueCancelled(true);
-    window.setTimeout(() => {
-      props.onClose?.();
-    }, 600);
+    props.onClose?.();
   }
 
   return {
@@ -434,12 +420,9 @@ export function useExecutionPanelState(props: ExecutionPanelProps) {
     trace,
     shareText,
     copied,
-    sharePreviewOpen,
-    queueCancelled,
     handleExecute,
     handleCopy,
     handleCancelQueue,
-    setSharePreviewOpen,
   };
 }
 
@@ -453,11 +436,8 @@ export function ExecutionPanel(props: ExecutionPanelProps) {
       trace={state.trace}
       shareText={state.shareText}
       copied={state.copied}
-      sharePreviewOpen={state.sharePreviewOpen}
-      queueCancelled={state.queueCancelled}
       onExecute={state.handleExecute}
       onCopy={state.handleCopy}
-      onOpenSharePreview={() => state.setSharePreviewOpen(true)}
       onCancelQueue={state.handleCancelQueue}
     />
   );

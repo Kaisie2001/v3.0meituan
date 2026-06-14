@@ -43,11 +43,8 @@ export function ExecutionSheet({ open, onClose, ...panelProps }: ExecutionSheetP
         trace={state.trace}
         shareText={state.shareText}
         copied={state.copied}
-        sharePreviewOpen={state.sharePreviewOpen}
-        queueCancelled={state.queueCancelled}
         onExecute={state.handleExecute}
         onCopy={state.handleCopy}
-        onOpenSharePreview={() => state.setSharePreviewOpen(true)}
         onCancelQueue={state.handleCancelQueue}
         onViewFinalPlan={handleViewFinalPlan}
         onClose={handleClose}

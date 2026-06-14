@@ -6,9 +6,10 @@ import type { ExecutionArtifact } from "@/lib/executionArtifacts";
 type ExecutionArtifactCardProps = {
   artifact: ExecutionArtifact;
   compactTop?: boolean;
+  onCancelQueue?: () => void;
 };
 
-export function ExecutionArtifactCard({ artifact, compactTop = false }: ExecutionArtifactCardProps) {
+export function ExecutionArtifactCard({ artifact, compactTop = false, onCancelQueue }: ExecutionArtifactCardProps) {
   const topSpacing = compactTop ? "mt-0" : "mt-3";
   if (artifact.type === "queue") {
     const queueLabel = `${artifact.queueTableType} ${artifact.queueNumber}`;
@@ -96,6 +97,16 @@ export function ExecutionArtifactCard({ artifact, compactTop = false }: Executio
           <p className="rounded-lg bg-meituan-gray/40 px-2.5 py-2 text-[10px] leading-4 text-black/48">
             商家说明：{artifact.merchantNote}
           </p>
+          {onCancelQueue ? (
+            <button
+              type="button"
+              data-testid="execution-cancel-queue-button"
+              className="w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-xs font-bold text-black/60 transition hover:bg-meituan-gray/50"
+              onClick={onCancelQueue}
+            >
+              取消排队
+            </button>
+          ) : null}
         </div>
       </div>
     );

@@ -58,14 +58,15 @@ async function completeExecutionFlow(
   await expect(page.getByTestId("execution-complete-title")).toBeVisible();
 
   const kinds = options?.expectArtifactKinds ?? ["queue", "reservation", "share", "voucher"];
-  await expect(artifactLocator(page, kinds)).toBeVisible();
+  await expect(page.getByTestId("execution-artifact-list")).toBeVisible();
+  await expect(artifactLocator(page, kinds).first()).toBeVisible();
 
   if (options?.expectTitles?.length) {
     let titleLoc = page.getByText(options.expectTitles[0], { exact: true });
     for (let i = 1; i < options.expectTitles.length; i += 1) {
       titleLoc = titleLoc.or(page.getByText(options.expectTitles[i], { exact: true }));
     }
-    await expect(titleLoc).toBeVisible();
+    await expect(titleLoc.first()).toBeVisible();
   }
 
   if (options?.expectQueueArtifact) {
@@ -74,17 +75,15 @@ async function completeExecutionFlow(
     await expect(page.getByTestId("execution-queue-number")).toBeVisible();
     await expect(page.getByTestId("execution-queue-ahead-count")).toBeVisible();
     await expect(page.getByTestId("execution-queue-progress")).toBeVisible();
-    await expect(page.getByText("已模拟预约")).toHaveCount(0);
-    await expect(page.getByText("Demo 凭证码")).toHaveCount(0);
+    await expect(page.getByTestId("execution-artifact-queue")).not.toContainText("已模拟预约");
     await expect(page.getByTestId("execution-cancel-queue-button")).toBeVisible();
   }
 
   if (options?.expectRestaurantArtifact) {
     await expect(page.getByTestId("execution-artifact-voucher")).toHaveCount(0);
-    await expect(page.getByText("Demo 凭证码")).toHaveCount(0);
     const queueCard = page.getByTestId("execution-artifact-queue");
     const reservationCard = page.getByTestId("execution-artifact-reservation");
-    await expect(queueCard.or(reservationCard)).toBeVisible();
+    await expect(queueCard.or(reservationCard).first()).toBeVisible();
   }
 
   await expect(page.getByTestId("execution-view-plan-button")).not.toHaveText("查看核销码");
