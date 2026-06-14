@@ -33,6 +33,7 @@ import {
   type AppFlowAction,
   type AppFlowState,
 } from "@/lib/appFlowMachine";
+import { applyTravelSettingsToAgentResult } from "@/lib/applyTravelSettingsToPlan";
 import type { AgentResult, ParseResult, ScoredPoi } from "@/lib/types";
 
 type PageFlowAction =
@@ -84,7 +85,9 @@ export default function Home() {
   const [seed, setSeed] = useState(defaultInputs.seed);
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AgentResult>(() => runAgent(defaultInputs.goal, defaultInputs.wechat, defaultInputs.seed));
+  const [agentResult, setAgentResult] = useState<AgentResult>(() =>
+    runAgent(defaultInputs.goal, defaultInputs.wechat, defaultInputs.seed),
+  );
   const [clarifyOpen, setClarifyOpen] = useState(false);
   const [pendingParse, setPendingParse] = useState<ParseResult | null>(null);
   const [travelSettings, setTravelSettings] = useState<TravelSettings>(DEFAULT_TRAVEL_SETTINGS);
@@ -92,6 +95,14 @@ export default function Home() {
   const [planningStep, setPlanningStep] = useState(0);
   const [activeDemoScenarioId, setActiveDemoScenarioId] = useState<DemoScenarioId | null>(null);
   const [executionPanelKey, setExecutionPanelKey] = useState(0);
+
+  const adjustedAgent = useMemo(
+    () => applyTravelSettingsToAgentResult(agentResult, travelSettings),
+    [agentResult, travelSettings],
+  );
+
+  const result = adjustedAgent;
+  const settingImpactSummary = adjustedAgent.planningAdjustment.settingImpactSummary;
 
   const travelSettingsSummary = useMemo(() => buildTravelSettingsSummary(travelSettings), [travelSettings]);
 
@@ -132,7 +143,7 @@ export default function Home() {
     setTravelSettingsOpen(false);
     setPlanningStep(0);
     setExecutionPanelKey((key) => key + 1);
-    setResult(runAgent(DEMO_DEFAULT_STATE.goal, DEMO_DEFAULT_STATE.wechat, DEMO_DEFAULT_STATE.seed));
+    setAgentResult(runAgent(DEMO_DEFAULT_STATE.goal, DEMO_DEFAULT_STATE.wechat, DEMO_DEFAULT_STATE.seed));
     dispatchFlow({ type: "RESET_DEMO" });
   }
 
@@ -183,8 +194,11 @@ export default function Home() {
     setTravelSettingsOpen(false);
 
     if (screen === "result" || screen === "execute" || screen === "details") {
-      const nextResult = applyTravelSettingsToResult(result.parseResult, nextSettings);
-      setResult(nextResult);
+      const payload = travelSettingsToPreferencePayload(nextSettings);
+      setAgentResult((prev) => ({
+        ...prev,
+        parseResult: applyParseOverrides(prev.parseResult, payload.intentPatch),
+      }));
       setActiveStep(STEP_COUNT);
       dispatchFlow({ type: "CLEAR_SELECTED_POI" });
       dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
@@ -233,14 +247,14 @@ export default function Home() {
       },
     };
     const nextResult = runAgentFromParseResult(patchedParse);
-    setResult(nextResult);
+    setAgentResult(nextResult);
     setActiveStep(STEP_COUNT);
     dispatchFlow({ type: "CLEAR_SELECTED_POI" });
     dispatchFlow({ type: "RESTORE_MAIN_PLAN" });
   }
 
   function finishPlanning(nextResult: AgentResult) {
-    setResult(nextResult);
+    setAgentResult(nextResult);
     setActiveStep(STEP_COUNT);
     setLoading(false);
     dispatchFlow({ type: "PLAN_SUCCEEDED" });
@@ -342,6 +356,7 @@ export default function Home() {
                     onConfirmExecute={() => dispatchFlow({ type: "OPEN_EXECUTE" })}
                     travelSettings={travelSettings}
                     travelSettingsSummary={travelSettingsSummary}
+                    settingImpactSummary={settingImpactSummary}
                     onOpenTravelSettings={openTravelSettings}
                   />
                 </div>
@@ -430,7 +445,7 @@ export default function Home() {
                 if (!pendingParse) return;
                 const patchedParse = applyParseOverrides(pendingParse, patch);
                 const nextResult = applyTravelSettingsToResult(patchedParse, travelSettings);
-                setResult(nextResult);
+                setAgentResult(nextResult);
                 setClarifyOpen(false);
                 setPendingParse(null);
                 setActiveStep(STEP_COUNT);

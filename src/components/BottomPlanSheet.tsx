@@ -11,6 +11,8 @@ import {
   type PlanComparisonSummary,
 } from "@/lib/planComparison";
 import { buildRouteGuidance, type RouteGuidanceSummary } from "@/lib/routeGuidance";
+import { buildMapPresentation } from "@/lib/mapPresentation";
+import { buildRouteBasis, type RouteBasisSummary } from "@/lib/routeBasis";
 import {
   buildFallbackSwitchNoteWithSettings,
   buildTravelSettingEffects,
@@ -38,6 +40,7 @@ type BottomPlanSheetProps = {
   onConfirmExecute?: () => void;
   travelSettings?: TravelSettings;
   travelSettingsSummary?: string;
+  settingImpactSummary?: string;
   onOpenTravelSettings?: () => void;
 };
 
@@ -220,6 +223,34 @@ function buildCompactGuidanceLines(guidance: RouteGuidanceSummary) {
   return lines.slice(0, 2);
 }
 
+function RouteBasisBlock({ basis }: { basis: RouteBasisSummary }) {
+  return (
+    <div className="space-y-2">
+      {basis.planIntro ? (
+        <p className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold leading-5 text-amber-900">{basis.planIntro}</p>
+      ) : null}
+      {basis.nodes.map((node, index) => (
+        <div key={`${node.roleLabel}-${node.poiName}-${index}`} className="rounded-lg bg-white px-2.5 py-2">
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[11px] font-extrabold text-meituan-ink">{node.poiName}</p>
+            <span className="shrink-0 rounded-full bg-meituan-gray px-1.5 py-0.5 text-[10px] font-bold text-black/55">
+              {node.roleLabel}
+            </span>
+          </div>
+          <p className="mt-1 text-[11px] leading-5 text-black/62">{node.reason}</p>
+          <p className="mt-1 text-[10px] leading-4 text-rose-800/90">注意：{node.riskNote}</p>
+        </div>
+      ))}
+      {basis.dynamicHint ? (
+        <p className="text-[10px] leading-4 text-black/45">
+          <span className="font-bold text-black/55">动态可行性：</span>
+          {basis.dynamicHint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function CollapseSection({
   title,
   children,
@@ -243,27 +274,6 @@ function CollapseSection({
         <span className="shrink-0 text-[10px] font-bold text-black/45">{open ? "收起" : "展开"}</span>
       </button>
       {open ? <div className="space-y-2 border-t border-black/6 px-3 pb-3 pt-2">{children}</div> : null}
-    </div>
-  );
-}
-
-function DynamicFeasibilityBlock({ effects }: { effects: TravelSettingEffectsSummary }) {
-  return (
-    <div className="rounded-lg border border-black/8 bg-white px-3 py-2.5">
-      <p className="text-xs font-extrabold text-meituan-ink">动态可行性</p>
-      <p className="mt-1 text-sm font-bold text-meituan-ink">{effects.windowHeadline}</p>
-      <p className="mt-1 text-[11px] font-semibold leading-5 text-black/62">{effects.riskSummaryLine}</p>
-      <div className="mt-2 flex flex-wrap gap-1">
-        {effects.dynamicBadges.map((badge) => (
-          <span key={badge} className="rounded-full bg-meituan-gray px-2 py-0.5 text-[10px] font-bold text-black/55">
-            {badge}
-          </span>
-        ))}
-      </div>
-      <p className="mt-2 text-[11px] leading-5 text-black/58">{effects.planningAdvice}</p>
-      {effects.preferenceReason ? (
-        <p className="mt-1.5 text-[11px] leading-5 text-black/55">{effects.preferenceReason}</p>
-      ) : null}
     </div>
   );
 }
@@ -309,9 +319,10 @@ function RouteThreeStepsBlock({ steps }: { steps: RouteStepPreview[] }) {
 function MainTabContent({
   summary,
   guidance,
-  settingEffects,
+  routeBasis,
   parseResult,
   travelSettingsSummary,
+  settingImpactSummary,
   onOpenTravelSettings,
   switchFeedback,
   onConfirmExecute,
@@ -320,9 +331,10 @@ function MainTabContent({
 }: {
   summary: CurrentPlanSummary;
   guidance: RouteGuidanceSummary;
-  settingEffects: TravelSettingEffectsSummary;
+  routeBasis: RouteBasisSummary;
   parseResult: ParseResult;
   travelSettingsSummary?: string;
+  settingImpactSummary?: string;
   onOpenTravelSettings?: () => void;
   switchFeedback: string | null;
   onConfirmExecute?: () => void;
@@ -388,108 +400,19 @@ function MainTabContent({
 
         <p className="truncate rounded-lg bg-white px-3 py-2 text-[11px] font-semibold text-black/62">{constraintText}</p>
 
+        {settingImpactSummary ? (
+          <p className="truncate rounded-lg bg-meituan-yellow/15 px-3 py-1.5 text-[11px] font-semibold text-meituan-ink">
+            {settingImpactSummary}
+          </p>
+        ) : null}
+
         <RouteThreeStepsBlock steps={routeSteps} />
 
-        <CompactGuidanceBlock guidance={guidance} />
-
-        <CollapseSection title="查看规划依据">
-          <DynamicFeasibilityBlock effects={settingEffects} />
-
-          <div>
-            <p className="mb-1 text-[11px] font-extrabold text-black/62">为什么适合你这次</p>
-            <ul className="space-y-0.5">
-              {summary.reasons.map((reason) => (
-                <li key={reason} className="text-[11px] leading-5 text-black/58">
-                  · {reason}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <p className="text-[10px] leading-4 text-black/42">{guidance.mapDemoNote}</p>
-
-          <div>
-            <p className="mb-1 text-[11px] font-bold text-black/45">完整路线节点</p>
-            <div className="space-y-1">
-              {summary.slots.length ? (
-                summary.slots.map((slot) => (
-                  <div
-                    key={`${slot.slotType}-${slot.startTime}`}
-                    className="flex items-center gap-2 rounded-lg bg-meituan-gray/70 px-2 py-1.5"
-                  >
-                    <span className="w-[68px] shrink-0 text-[10px] font-bold text-black/50">
-                      {slot.startTime}-{slot.endTime}
-                    </span>
-                    <span className="rounded-full bg-meituan-yellow/70 px-1.5 py-0.5 text-[10px] font-bold text-meituan-ink">
-                      {getPersonaSlotLabel(parseResult, slot.slotType)}
-                    </span>
-                    <span className="min-w-0 truncate text-[11px] font-bold text-black/78">{slot.poi?.name ?? "待定地点"}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="rounded-lg bg-meituan-gray/70 px-2 py-1.5 text-[11px] leading-5 text-black/55">
-                  {summary.slotFallbackText ?? "暂无路线节点"}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-1 text-[11px] leading-5 text-black/58">
-            {summary.experienceLabel ? (
-              <p>
-                <span className="font-bold text-black/65">体验标签：</span>
-                {summary.experienceLabel}
-              </p>
-            ) : null}
-            {summary.riskSummary ? (
-              <p>
-                <span className="font-bold text-black/65">风险摘要：</span>
-                {summary.riskSummary}
-              </p>
-            ) : null}
-            {typeof summary.safetyScore === "number" ? (
-              <p>
-                <span className="font-bold text-black/65">稳妥度：</span>
-                {summary.safetyScore}
-              </p>
-            ) : null}
-            {summary.comparisonSummaryLine ? (
-              <p>
-                <span className="font-bold text-black/65">对比说明：</span>
-                {summary.comparisonSummaryLine}
-              </p>
-            ) : null}
-            {summary.solvedRisk ? (
-              <p>
-                <span className="font-bold text-black/65">解决的问题：</span>
-                {summary.solvedRisk}
-              </p>
-            ) : null}
-            {summary.tradeoffSummary ? (
-              <p>
-                <span className="font-bold text-black/65">代价：</span>
-                {summary.tradeoffSummary}
-              </p>
-            ) : null}
-            <p>
-              <span className="font-bold text-black/65">策略说明：</span>
-              {summary.strategyNote}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-meituan-yellow/40 bg-meituan-yellow/10 px-3 py-2">
-            <p className="text-[11px] font-extrabold text-meituan-ink">完整出行指引</p>
-            <ol className="mt-1.5 space-y-1">
-              {guidance.steps.map((step, index) => (
-                <li key={`${index}-${step}`} className="text-[11px] leading-5 text-black/65">
-                  {index + 1}. {step}
-                </li>
-              ))}
-            </ol>
-            {guidance.timeHint ? <p className="mt-1.5 text-[11px] leading-5 text-black/58">{guidance.timeHint}</p> : null}
-            {guidance.preferenceHint ? <p className="mt-1 text-[11px] leading-5 text-black/55">{guidance.preferenceHint}</p> : null}
-          </div>
+        <CollapseSection title="为什么这样排？">
+          <RouteBasisBlock basis={routeBasis} />
         </CollapseSection>
+
+        <CompactGuidanceBlock guidance={guidance} />
       </div>
 
       <div className="shrink-0 border-t border-black/6 bg-white pt-2">
@@ -784,6 +707,7 @@ export function BottomPlanSheet({
   onConfirmExecute,
   travelSettings,
   travelSettingsSummary,
+  settingImpactSummary,
   onOpenTravelSettings,
 }: BottomPlanSheetProps) {
   const displayPoi = selectedPoi ?? rankedPois[0];
@@ -812,6 +736,46 @@ export function BottomPlanSheet({
       }),
     [routePlan, parseResult.intent, selectedPlanType, selectedFallbackIndex, travelSettings],
   );
+
+  const mapPresentation = useMemo(
+    () =>
+      buildMapPresentation({
+        routePlan,
+        rankedPois,
+        parseResult,
+        selectedPlanType,
+        selectedFallbackIndex,
+        travelSettings,
+      }),
+    [routePlan, rankedPois, parseResult, selectedPlanType, selectedFallbackIndex, travelSettings],
+  );
+
+  const routeBasis = useMemo(() => {
+    const fallbackPlanTitle =
+      selectedPlanType === "fallback" && selectedFallbackIndex !== null
+        ? routePlan.fallbackPlans?.[selectedFallbackIndex]?.title
+        : undefined;
+
+    return buildRouteBasis({
+      slots: currentPlanSummary.slots,
+      parseResult,
+      selectedPlanType,
+      selectedFallbackIndex,
+      travelSettings,
+      settingEffects,
+      fallbackPlanTitle,
+      activeRoutePoiIds: mapPresentation.activeRoutePoiIds,
+    });
+  }, [
+    currentPlanSummary.slots,
+    parseResult,
+    selectedPlanType,
+    selectedFallbackIndex,
+    travelSettings,
+    settingEffects,
+    routePlan.fallbackPlans,
+    mapPresentation.activeRoutePoiIds,
+  ]);
 
   useEffect(() => {
     if (!switchFeedback) return;
@@ -853,9 +817,10 @@ export function BottomPlanSheet({
           <MainTabContent
             summary={currentPlanSummary}
             guidance={routeGuidance}
-            settingEffects={settingEffects}
+            routeBasis={routeBasis}
             parseResult={parseResult}
             travelSettingsSummary={travelSettingsSummary}
+            settingImpactSummary={settingImpactSummary}
             onOpenTravelSettings={onOpenTravelSettings}
             switchFeedback={switchFeedback}
             onConfirmExecute={onConfirmExecute}
