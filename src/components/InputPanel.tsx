@@ -12,12 +12,12 @@ const SCENARIO_CHIP_TEST_IDS: Partial<Record<DemoScenarioId, string>> = {
   work: "scenario-chip-workAfternoon",
 };
 
-const SCENARIO_SHORTCUTS: Record<DemoScenarioId, { emoji: string; hint: string }> = {
-  friends: { emoji: "🍻", hint: "晚饭 + 续摊" },
-  family: { emoji: "👨‍👩‍👧", hint: "亲子 · 少折腾" },
-  date: { emoji: "💛", hint: "氛围 · 散步" },
-  work: { emoji: "☕", hint: "安静 · 久坐" },
-  errands: { emoji: "📍", hint: "顺路 · 少折返" },
+const SCENARIO_SHORTCUTS: Record<DemoScenarioId, { emoji: string; subtitle: string; tags: string[] }> = {
+  friends: { emoji: "🍻", subtitle: "晚饭 + 续摊", tags: ["少排队", "好聊天"] },
+  family: { emoji: "👨‍👩‍👧", subtitle: "亲子 + 少折腾", tags: ["近距离", "适合孩子"] },
+  date: { emoji: "💛", subtitle: "氛围 + 散步", tags: ["重体验", "不赶路"] },
+  work: { emoji: "☕", subtitle: "安静 + 久坐", tags: ["咖啡", "插座"] },
+  errands: { emoji: "📍", subtitle: "顺路 + 少折返", tags: ["高效率", "少绕路"] },
 };
 
 type InputPanelProps = {
@@ -126,8 +126,8 @@ export function InputPanel({
         </button>
 
         <div>
-          <p className="mb-2 text-[11px] font-bold text-black/40">快捷入口</p>
-          <div className="grid grid-cols-2 gap-2">
+          <p className="mb-2.5 text-[11px] font-bold text-black/40">快捷入口</p>
+          <div className="grid grid-cols-2 gap-2.5">
             {DEMO_SCENARIOS.map((scenario) => {
               const active = activeDemoScenarioId === scenario.id;
               const shortcut = SCENARIO_SHORTCUTS[scenario.id];
@@ -136,18 +136,38 @@ export function InputPanel({
                   key={scenario.id}
                   type="button"
                   data-testid={SCENARIO_CHIP_TEST_IDS[scenario.id]}
-                  className={`flex items-start gap-2 rounded-2xl border px-3 py-2 text-left transition ${
+                  className={`flex min-h-[108px] flex-col rounded-2xl border px-3 py-2.5 text-left shadow-sm transition active:scale-[0.99] ${
                     active
-                      ? "border-meituan-yellow bg-meituan-yellow/15 shadow-sm"
-                      : "border-black/6 bg-meituan-gray/50 hover:border-meituan-yellow/40 hover:bg-white"
+                      ? "border-meituan-yellow bg-meituan-yellow/20 shadow-[0_4px_14px_rgba(255,195,0,0.22)]"
+                      : "border-black/6 bg-white hover:border-meituan-yellow/45 hover:bg-meituan-yellow/5"
                   }`}
                   onClick={() => onSelectDemoScenario(scenario.id)}
                 >
-                  <span className="text-lg leading-none">{shortcut.emoji}</span>
-                  <span className="min-w-0">
-                    <span className="block text-xs font-extrabold text-meituan-ink">{scenario.label}</span>
-                    <span className="mt-0.5 block truncate text-[10px] font-semibold text-black/45">{shortcut.hint}</span>
-                  </span>
+                  <div className="flex items-start gap-2">
+                    <span
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-lg leading-none ${
+                        active ? "bg-white/80" : "bg-meituan-yellow/15"
+                      }`}
+                    >
+                      {shortcut.emoji}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-extrabold leading-4 text-meituan-ink">{scenario.label}</span>
+                      <span className="mt-1 block text-[10px] font-semibold leading-4 text-black/50">{shortcut.subtitle}</span>
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {shortcut.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className={`rounded-full px-2 py-0.5 text-[9px] font-bold leading-4 ${
+                          active ? "bg-white/75 text-meituan-ink" : "bg-meituan-gray/80 text-black/50"
+                        }`}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 </button>
               );
             })}

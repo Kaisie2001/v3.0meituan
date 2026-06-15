@@ -18,22 +18,23 @@ const SHEET_HEIGHT_CLASS: Record<HomeSheetState, string> = {
 
 type HomeBottomSheetProps = {
   children: ReactNode;
+  className?: string;
   initialState?: HomeSheetState;
 };
 
-export function HomeBottomSheet({ children, initialState = "mid" }: HomeBottomSheetProps) {
+export function HomeBottomSheet({ children, className = "", initialState = "mid" }: HomeBottomSheetProps) {
   const [sheetState, setSheetState] = useState<HomeSheetState>(initialState);
 
   return (
     <div
       data-testid="home-bottom-sheet"
       data-sheet-state={sheetState}
-      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex max-h-[88%] flex-col overflow-hidden rounded-t-[28px] border-t border-white/90 bg-white shadow-[0_-12px_40px_rgba(15,23,42,0.12)] transition-[height] duration-300 ease-out ${SHEET_HEIGHT_CLASS[sheetState]}`}
+      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex max-h-[88%] flex-col overflow-hidden rounded-t-[28px] border-t border-white/90 bg-white opacity-100 shadow-[0_-12px_40px_rgba(15,23,42,0.12)] transition-[height] duration-300 ease-out ${SHEET_HEIGHT_CLASS[sheetState]} ${className}`}
     >
       <button
         type="button"
         data-testid="home-sheet-handle"
-        className="flex shrink-0 touch-none items-center justify-center py-3 active:opacity-70"
+        className="flex shrink-0 items-center justify-center py-3 active:opacity-70"
         onClick={() => setSheetState((state) => SHEET_NEXT[state])}
         aria-label="调整规划面板高度"
       >

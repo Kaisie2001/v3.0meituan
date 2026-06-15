@@ -62,7 +62,18 @@ function hasLayoutSize(element: HTMLElement) {
   return rect.width > 0 && rect.height > 0;
 }
 
+function MapFallback({ className = "" }: { className?: string }) {
+  return (
+    <div
+      data-testid="home-map-fallback"
+      aria-hidden="true"
+      className={`h-full w-full bg-[#eef1e8] ${className}`}
+    />
+  );
+}
+
 export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
+  const [mounted, setMounted] = useState(false);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -71,6 +82,7 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
   const tileIndexRef = useRef(0);
   const tileErrorCountRef = useRef(0);
   const [tileFailed, setTileFailed] = useState(false);
+  const [mapError, setMapError] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
   const visualMarkers = useMemo(() => {
@@ -83,6 +95,12 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
   }, []);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+
     const wrapper = wrapperRef.current;
     const host = hostRef.current;
     if (!wrapper || !host) return;
@@ -91,85 +109,94 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
     let resizeObserver: ResizeObserver | null = null;
 
     const mountMap = () => {
-      if (disposed || mapRef.current || !hasLayoutSize(wrapper)) return;
+      if (disposed || mapRef.current || mapError || !hasLayoutSize(wrapper)) return;
 
-      const map = L.map(host, {
-        zoomControl: false,
-        attributionControl: true,
-        dragging: true,
-        scrollWheelZoom: true,
-        doubleClickZoom: true,
-        boxZoom: false,
-        keyboard: false,
-        touchZoom: true,
-      });
-
-      L.control.zoom({ position: "topright" }).addTo(map);
-
-      const createLayer = (index: number) => {
-        const provider = tileProviders[index] ?? tileProviders[0];
-        const layer = L.tileLayer(provider.url, {
-          maxZoom: 19,
-          attribution: provider.attribution,
+      try {
+        const map = L.map(host, {
+          zoomControl: false,
+          attributionControl: true,
+          dragging: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: false,
+          keyboard: false,
+          touchZoom: true,
         });
-        layer.on("load", () => {
-          tileErrorCountRef.current = 0;
-          setTileFailed(false);
+
+        L.control.zoom({ position: "topright" }).addTo(map);
+
+        const createLayer = (index: number) => {
+          const provider = tileProviders[index] ?? tileProviders[0];
+          const layer = L.tileLayer(provider.url, {
+            maxZoom: 19,
+            attribution: provider.attribution,
+          });
+          layer.on("load", () => {
+            tileErrorCountRef.current = 0;
+            setTileFailed(false);
+          });
+          layer.on("tileerror", () => {
+            tileErrorCountRef.current += 1;
+            if (tileErrorCountRef.current < 24) return;
+            if (tileIndexRef.current >= tileProviders.length - 1) {
+              setTileFailed(true);
+              return;
+            }
+            tileIndexRef.current += 1;
+            const nextLayer = createLayer(tileIndexRef.current);
+            try {
+              tileLayerRef.current?.removeFrom(map);
+            } catch {}
+            tileLayerRef.current = nextLayer;
+            tileErrorCountRef.current = 0;
+            nextLayer.addTo(map);
+          });
+          return layer;
+        };
+
+        tileIndexRef.current = 0;
+        tileLayerRef.current = createLayer(0);
+        tileLayerRef.current.addTo(map);
+
+        markerLayerRef.current = L.layerGroup().addTo(map);
+
+        for (const marker of visualMarkers) {
+          L.circleMarker(marker.latlng, {
+            radius: 7,
+            color: "#ffffff",
+            weight: 2,
+            fillColor: marker.color,
+            fillOpacity: 0.92,
+            interactive: false,
+          }).addTo(markerLayerRef.current);
+
+          const icon = L.divIcon({
+            className: "home-map-marker-label",
+            html: `<span style="display:inline-block;padding:2px 7px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(15,23,42,0.08);font-size:10px;font-weight:700;color:rgba(15,23,42,0.62);box-shadow:0 1px 2px rgba(15,23,42,0.08);white-space:nowrap;">${marker.label}</span>`,
+            iconSize: [0, 0],
+            iconAnchor: [0, -14],
+          });
+          L.marker(marker.latlng, { icon, interactive: false }).addTo(markerLayerRef.current);
+        }
+
+        map.setView(MAP_CENTER, MAP_ZOOM);
+        mapRef.current = map;
+
+        map.whenReady(() => {
+          if (disposed) return;
+          refreshMapSize(map);
+          window.requestAnimationFrame(() => refreshMapSize(map));
+          window.setTimeout(() => refreshMapSize(map), 120);
+          window.setTimeout(() => refreshMapSize(map), 400);
+          setMapReady(true);
         });
-        layer.on("tileerror", () => {
-          tileErrorCountRef.current += 1;
-          if (tileErrorCountRef.current < 24) return;
-          if (tileIndexRef.current >= tileProviders.length - 1) {
-            setTileFailed(true);
-            return;
-          }
-          tileIndexRef.current += 1;
-          const nextLayer = createLayer(tileIndexRef.current);
-          try {
-            tileLayerRef.current?.removeFrom(map);
-          } catch {}
-          tileLayerRef.current = nextLayer;
-          tileErrorCountRef.current = 0;
-          nextLayer.addTo(map);
-        });
-        return layer;
-      };
-
-      tileIndexRef.current = 0;
-      tileLayerRef.current = createLayer(0);
-      tileLayerRef.current.addTo(map);
-
-      markerLayerRef.current = L.layerGroup().addTo(map);
-
-      for (const marker of visualMarkers) {
-        L.circleMarker(marker.latlng, {
-          radius: 7,
-          color: "#ffffff",
-          weight: 2,
-          fillColor: marker.color,
-          fillOpacity: 0.92,
-          interactive: false,
-        }).addTo(markerLayerRef.current);
-
-        const icon = L.divIcon({
-          className: "home-map-marker-label",
-          html: `<span style="display:inline-block;padding:2px 7px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(15,23,42,0.08);font-size:10px;font-weight:700;color:rgba(15,23,42,0.62);box-shadow:0 1px 2px rgba(15,23,42,0.08);white-space:nowrap;">${marker.label}</span>`,
-          iconSize: [0, 0],
-          iconAnchor: [0, -14],
-        });
-        L.marker(marker.latlng, { icon, interactive: false }).addTo(markerLayerRef.current);
+      } catch {
+        setMapError(true);
+        try {
+          mapRef.current?.remove();
+        } catch {}
+        mapRef.current = null;
       }
-
-      map.setView(MAP_CENTER, MAP_ZOOM);
-      mapRef.current = map;
-
-      map.whenReady(() => {
-        refreshMapSize(map);
-        window.requestAnimationFrame(() => refreshMapSize(map));
-        window.setTimeout(() => refreshMapSize(map), 120);
-        window.setTimeout(() => refreshMapSize(map), 400);
-        setMapReady(true);
-      });
     };
 
     const handleResize = () => {
@@ -199,12 +226,20 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
       markerLayerRef.current = null;
       tileLayerRef.current = null;
     };
-  }, [visualMarkers]);
+  }, [mounted, visualMarkers, mapError]);
 
   useLayoutEffect(() => {
     if (!mapRef.current || !wrapperRef.current) return;
     refreshMapSize(mapRef.current);
   }, [mapReady, className]);
+
+  if (!mounted) {
+    return <MapFallback className={className} />;
+  }
+
+  if (mapError) {
+    return <MapFallback className={className} />;
+  }
 
   if (tileFailed) {
     return <HomeMapPlaceholder className={className} />;

@@ -56,7 +56,12 @@ function pageFlowReducer(state: AppFlowState, action: PageFlowAction): AppFlowSt
 const STEP_COUNT = 6;
 const PLANNING_STEP_MS = 500;
 const LeafletPlannerMap = dynamic(() => import("@/components/LeafletPlannerMap").then((mod) => mod.LeafletPlannerMap), { ssr: false });
-const HomeMapBackground = dynamic(() => import("@/components/HomeMapBackground"), { ssr: false });
+const HomeMapBackground = dynamic(() => import("@/components/HomeMapBackground"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-[#eef1e8]" data-testid="home-map-fallback" aria-hidden="true" />
+  ),
+});
 
 function ScreenBackButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
@@ -310,11 +315,13 @@ export default function Home() {
           <div className="relative h-full overflow-hidden">
             {screen === "input" ? (
               <div data-testid="home-screen" className="relative h-full min-h-0 w-full overflow-hidden">
-                <HomeMapBackground className="absolute inset-0 z-0 h-full w-full" />
+                <div className="absolute inset-0 z-0 h-full w-full">
+                  <HomeMapBackground className="h-full w-full" />
+                </div>
 
                 <HomeHeader className="absolute inset-x-0 top-0 z-20" onResetDemo={resetDemoState} />
 
-                <HomeBottomSheet>
+                <HomeBottomSheet className="z-30">
                   <InputPanel
                     variant="sheet"
                     goal={goal}
