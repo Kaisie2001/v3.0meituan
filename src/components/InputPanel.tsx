@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/demoScenarios";
 import { defaultInputs } from "@/lib/parseIntent";
 
@@ -20,6 +20,9 @@ const SCENARIO_SHORTCUTS: Record<DemoScenarioId, { emoji: string; subtitle: stri
   errands: { emoji: "📍", subtitle: "顺路 + 少折返" },
 };
 
+const MOCK_VOICE_GOAL = "今晚和朋友吃饭，别排太久，吃完想找地方聊天。";
+const MOCK_FAVORITE_SEED = "三里屯咖啡; 朝阳公园野餐; 望京小馆";
+
 type InputPanelProps = {
   goal: string;
   wechat: string;
@@ -36,6 +39,32 @@ type InputPanelProps = {
   onResetDemo: () => void;
   onGenerate: () => void;
 };
+
+function ActionChip({
+  active,
+  onClick,
+  children,
+  className = "",
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex min-w-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-bold leading-4 transition active:scale-[0.98] ${
+        active
+          ? "border-meituan-yellow/60 bg-meituan-yellow/12 text-meituan-ink"
+          : "border-black/8 bg-white text-black/62 hover:border-black/12 hover:bg-meituan-gray/50"
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function InputPanel({
   goal,
@@ -55,9 +84,40 @@ export function InputPanel({
 }: InputPanelProps) {
   const [wechatOpen, setWechatOpen] = useState(false);
   const [seedOpen, setSeedOpen] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [favoritesPicked, setFavoritesPicked] = useState(false);
+  const voiceTimerRef = useRef<number | null>(null);
+
   const hasWechat = wechat.trim().length > 0;
   const hasSeed = seed.trim().length > 0;
   const isSheet = variant === "sheet";
+
+  useEffect(() => {
+    return () => {
+      if (voiceTimerRef.current !== null) {
+        window.clearTimeout(voiceTimerRef.current);
+      }
+    };
+  }, []);
+
+  function handleVoiceInput() {
+    if (voiceListening) return;
+    setVoiceListening(true);
+    voiceTimerRef.current = window.setTimeout(() => {
+      onGoalChange(MOCK_VOICE_GOAL);
+      setVoiceListening(false);
+      voiceTimerRef.current = null;
+    }, 1000);
+  }
+
+  function handleFavoritesPick() {
+    if (!favoritesPicked && !hasSeed) {
+      onSeedChange(MOCK_FAVORITE_SEED);
+      setFavoritesPicked(true);
+      return;
+    }
+    setSeedOpen((open) => !open);
+  }
 
   return (
     <section
@@ -100,6 +160,58 @@ export function InputPanel({
             placeholder="例如：晚上和朋友吃饭，吃完还想找地方聊聊天"
           />
         </label>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="voice-input-button"
+            disabled={voiceListening}
+            onClick={handleVoiceInput}
+            className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold leading-4 transition active:scale-[0.98] disabled:opacity-80 ${
+              voiceListening
+                ? "border-meituan-yellow/50 bg-meituan-yellow/10 text-meituan-ink"
+                : "border-black/10 bg-meituan-gray/60 text-meituan-ink hover:border-meituan-yellow/40 hover:bg-meituan-yellow/10"
+            }`}
+          >
+            <span aria-hidden="true">🎤</span>
+            <span>{voiceListening ? "正在听你说…" : "语音输入"}</span>
+          </button>
+
+          <ActionChip active={hasWechat || wechatOpen} onClick={() => setWechatOpen((open) => !open)}>
+            {hasWechat ? "同行人 · 已补充" : "同行人"}
+          </ActionChip>
+
+          <ActionChip
+            active={favoritesPicked || hasSeed || seedOpen}
+            onClick={handleFavoritesPick}
+            className="max-w-full"
+          >
+            <span className="truncate">
+              {favoritesPicked ? "已选择 3 个想去地点" : hasSeed ? "从收藏选 · 已补充" : "从收藏选"}
+            </span>
+          </ActionChip>
+        </div>
+
+        {wechatOpen ? (
+          <textarea
+            className="h-20 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
+            value={wechat}
+            onChange={(event) => onWechatChange(event.target.value)}
+            placeholder={defaultInputs.wechat}
+          />
+        ) : null}
+
+        {seedOpen ? (
+          <textarea
+            className="h-20 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
+            value={seed}
+            onChange={(event) => {
+              onSeedChange(event.target.value);
+              if (!event.target.value.trim()) setFavoritesPicked(false);
+            }}
+            placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
+          />
+        ) : null}
 
         <button
           type="button"
@@ -157,52 +269,6 @@ export function InputPanel({
             })}
           </div>
         </div>
-      </div>
-
-      <div className={`space-y-2 border-t border-black/5 bg-meituan-gray/30 ${isSheet ? "px-1 py-2.5" : "px-4 py-3"}`}>
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left"
-          onClick={() => setWechatOpen((open) => !open)}
-          aria-expanded={wechatOpen}
-        >
-          <span>
-            <span className="block text-sm font-bold text-black/75">同行人要求</span>
-            <span className="mt-0.5 block text-[11px] text-black/45">口味、预算、人群偏好</span>
-            {hasWechat ? <span className="mt-1 inline-block text-[11px] font-bold text-emerald-700">已补充</span> : null}
-          </span>
-          <span className="shrink-0 text-xs font-bold text-black/45">{wechatOpen ? "收起" : "添加"}</span>
-        </button>
-        {wechatOpen ? (
-          <textarea
-            className="h-24 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
-            value={wechat}
-            onChange={(event) => onWechatChange(event.target.value)}
-            placeholder={defaultInputs.wechat}
-          />
-        ) : null}
-
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left"
-          onClick={() => setSeedOpen((open) => !open)}
-          aria-expanded={seedOpen}
-        >
-          <span>
-            <span className="block text-sm font-bold text-black/75">种草 / 收藏</span>
-            <span className="mt-0.5 block text-[11px] text-black/45">想去的店、清单、朋友推荐</span>
-            {hasSeed ? <span className="mt-1 inline-block text-[11px] font-bold text-emerald-700">已补充</span> : null}
-          </span>
-          <span className="shrink-0 text-xs font-bold text-black/45">{seedOpen ? "收起" : "添加"}</span>
-        </button>
-        {seedOpen ? (
-          <textarea
-            className="h-24 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
-            value={seed}
-            onChange={(event) => onSeedChange(event.target.value)}
-            placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
-          />
-        ) : null}
       </div>
     </section>
   );
