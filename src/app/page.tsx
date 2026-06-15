@@ -309,8 +309,8 @@ export default function Home() {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <div className="relative h-full overflow-hidden">
             {screen === "input" ? (
-              <div data-testid="home-screen" className="relative h-full overflow-hidden">
-                <HomeMapBackground className="absolute inset-0 z-0" />
+              <div data-testid="home-screen" className="relative h-full min-h-0 w-full overflow-hidden">
+                <HomeMapBackground className="absolute inset-0 z-0 h-full w-full" />
 
                 <HomeHeader className="absolute inset-x-0 top-0 z-20" onResetDemo={resetDemoState} />
 

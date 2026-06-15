@@ -11,9 +11,9 @@ const SHEET_NEXT: Record<HomeSheetState, HomeSheetState> = {
 };
 
 const SHEET_HEIGHT_CLASS: Record<HomeSheetState, string> = {
-  collapsed: "h-[36%] min-h-[280px] max-h-[42%]",
-  mid: "h-[50%] min-h-[340px] max-h-[56%]",
-  expanded: "h-[76%] min-h-[420px] max-h-[82%]",
+  collapsed: "h-[38%]",
+  mid: "h-[52%]",
+  expanded: "h-[78%]",
 };
 
 type HomeBottomSheetProps = {
@@ -28,7 +28,7 @@ export function HomeBottomSheet({ children, initialState = "mid" }: HomeBottomSh
     <div
       data-testid="home-bottom-sheet"
       data-sheet-state={sheetState}
-      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex flex-col overflow-hidden rounded-t-[28px] border-t border-white/90 bg-white shadow-[0_-12px_40px_rgba(15,23,42,0.12)] transition-[height,max-height,min-height] duration-300 ease-out ${SHEET_HEIGHT_CLASS[sheetState]}`}
+      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-30 flex max-h-[88%] flex-col overflow-hidden rounded-t-[28px] border-t border-white/90 bg-white shadow-[0_-12px_40px_rgba(15,23,42,0.12)] transition-[height] duration-300 ease-out ${SHEET_HEIGHT_CLASS[sheetState]}`}
     >
       <button
         type="button"

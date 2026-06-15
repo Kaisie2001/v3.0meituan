@@ -219,7 +219,7 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
     >
       <div
         ref={hostRef}
-        className="h-full w-full [&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full [&_.leaflet-control-zoom]:!mt-2"
+        className="absolute inset-0 h-full w-full [&_.leaflet-container]:!h-full [&_.leaflet-container]:!w-full [&_.leaflet-control-zoom]:!mt-2"
       />
     </div>
   );
