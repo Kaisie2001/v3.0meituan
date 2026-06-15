@@ -1,19 +1,36 @@
 import { test, expect, type Page } from "@playwright/test";
 import { getScenarioFixture } from "../src/lib/scenarioFixtures";
 
+const MOCK_VOICE_GOAL = "今晚和朋友吃饭，别排太久，吃完想找地方聊天。";
+
 async function gotoHome(page: Page) {
   await page.goto("/");
-  await expect(page.getByTestId("goal-input")).toBeVisible();
+  await expect(page.getByTestId("home-screen")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("home-bottom-sheet")).toBeVisible();
+  await expect(page.getByTestId("home-input-sheet")).toBeVisible();
+  await expect(page.getByTestId("goal-input")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("run-agent-button")).toBeVisible();
+}
+
+async function clickStartPlanning(page: Page) {
+  const button = page.getByTestId("run-agent-button");
+  await button.scrollIntoViewIfNeeded();
+  await expect(button).toBeEnabled();
+  await button.click();
 }
 
 async function runPlanningFromChip(page: Page, chipTestId: string) {
-  await page.getByTestId(chipTestId).click();
-  await page.getByTestId("run-agent-button").click();
+  const chip = page.getByTestId(chipTestId);
+  await chip.scrollIntoViewIfNeeded();
+  await chip.click();
+  await clickStartPlanning(page);
 }
 
 async function runPlanningWithGoal(page: Page, goal: string) {
-  await page.getByTestId("goal-input").fill(goal);
-  await page.getByTestId("run-agent-button").click();
+  const input = page.getByTestId("goal-input");
+  await input.scrollIntoViewIfNeeded();
+  await input.fill(goal);
+  await clickStartPlanning(page);
 }
 
 async function waitForResultScreen(page: Page) {
@@ -145,6 +162,34 @@ async function assertNoArtifactKinds(page: Page, kinds: ArtifactKind[]) {
     await expect(page.getByTestId(ARTIFACT_TEST_ID_BY_KIND[kind])).toHaveCount(0);
   }
 }
+
+test.describe("map-first home entry", () => {
+  test.beforeEach(async ({ page }) => {
+    await gotoHome(page);
+  });
+
+  test("home entry shortcuts do not block planning", async ({ page }) => {
+    const favoritesButton = page.getByTestId("favorites-pick-button");
+    await favoritesButton.scrollIntoViewIfNeeded();
+    await favoritesButton.click();
+    await expect(favoritesButton).toContainText("已选择 3 个想去地点");
+
+    await clickStartPlanning(page);
+    await waitForResultScreen(page);
+    await assertResultStructure(page);
+  });
+
+  test("voice input mock fills goal and can plan", async ({ page }) => {
+    const voiceButton = page.getByTestId("voice-input-button");
+    await voiceButton.scrollIntoViewIfNeeded();
+    await voiceButton.click();
+    await expect(page.getByTestId("goal-input")).toHaveValue(MOCK_VOICE_GOAL, { timeout: 3_000 });
+
+    await clickStartPlanning(page);
+    await waitForResultScreen(page);
+    await assertResultStructure(page);
+  });
+});
 
 test.describe("golden paths", () => {
   test.beforeEach(async ({ page }) => {

@@ -81,15 +81,18 @@ function ActionChip({
   onClick,
   children,
   className = "",
+  testId,
 }: {
   active?: boolean;
   onClick: () => void;
   children: ReactNode;
   className?: string;
+  testId?: string;
 }) {
   return (
     <button
       type="button"
+      data-testid={testId}
       onClick={onClick}
       className={`inline-flex min-w-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-bold leading-4 transition active:scale-[0.98] ${
         active
@@ -227,7 +230,11 @@ export function InputPanel({
             <span>{voiceListening ? "正在听你说…" : "语音输入"}</span>
           </button>
 
-          <ActionChip active={hasWechat || wechatOpen} onClick={() => setWechatOpen((open) => !open)}>
+          <ActionChip
+            active={hasWechat || wechatOpen}
+            onClick={() => setWechatOpen((open) => !open)}
+            testId="companion-chip-button"
+          >
             {hasWechat ? "同行人 · 已补充" : "同行人"}
           </ActionChip>
 
@@ -235,6 +242,7 @@ export function InputPanel({
             active={favoritesPicked || hasSeed || seedOpen}
             onClick={handleFavoritesPick}
             className="max-w-full"
+            testId="favorites-pick-button"
           >
             <span className="truncate">
               {favoritesPicked ? "已选择 3 个想去地点" : hasSeed ? "从收藏选 · 已补充" : "从收藏选"}
