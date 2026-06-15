@@ -1,10 +1,10 @@
 "use client";
 
 const planningSteps = [
-  "读懂你的安排",
-  "看看附近有什么好去处",
-  "确认排队和能不能订",
-  "拼成顺路的路线",
+  "识别时间、人群、预算与偏好",
+  "解析导入地点",
+  "地点不足时补充附近可成行地点",
+  "检查排队、营业、路线衔接",
 ];
 
 type PlanningModalProps = {
@@ -37,7 +37,7 @@ export function PlanningModal({ open, step }: PlanningModalProps) {
               <h2 id="planning-modal-title" className="text-base font-extrabold text-meituan-ink">
                 正在帮你排路线
               </h2>
-              <p className="mt-1 text-sm leading-5 text-black/55">综合距离、排队和出行偏好，马上就好。</p>
+              <p className="mt-1 text-sm leading-5 text-black/55">按距离、排队、营业状态自动补齐，马上就好。</p>
             </div>
           </div>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DEMO_SCENARIOS, type DemoScenarioId } from "@/lib/demoScenarios";
 import { defaultInputs } from "@/lib/parseIntent";
 
@@ -20,55 +20,32 @@ const SCENARIO_SHORTCUTS: Record<DemoScenarioId, { emoji: string; subtitle: stri
   errands: { emoji: "📍", subtitle: "顺路 + 少折返" },
 };
 
-const MOCK_VOICE_GOAL = "今晚和朋友吃饭，别排太久，吃完想找地方聊天。";
-const MOCK_FAVORITE_SEED = "三里屯咖啡; 朝阳公园野餐; 望京小馆";
+const MOCK_VOICE_GOAL = "今晚和两个朋友吃饭，有人不吃辣，别排太久，吃完想找地方聊天。";
+const IMPORT_GOAL_SUGGESTION = "结合我导入的地点，安排一个今晚可执行路线。";
+const IMPORT_MOCK_DISCLAIMER =
+  "当前为 demo mock，真实产品可通过用户授权识别链接、分享内容或地点名。";
 
-type EntrySourceId = "favorites" | "nearby" | "friend";
+type ParsedPlaceOption = {
+  id: string;
+  name: string;
+  category: string;
+  sourceLabel: string;
+};
 
-const ENTRY_SOURCES: {
-  id: EntrySourceId;
-  emoji: string;
-  title: string;
-  subtitle: string;
-  status: string;
-  goal: string;
-}[] = [
-  {
-    id: "favorites",
-    emoji: "⭐",
-    title: "收藏想去",
-    subtitle: "想去的店、清单、团购",
-    status: "已加入 3 个收藏地点",
-    goal: "从我收藏的想去地点里，安排一个今晚的路线。",
-  },
-  {
-    id: "nearby",
-    emoji: "📍",
-    title: "附近可成行",
-    subtitle: "现在附近适合去哪",
-    status: "已读取附近推荐",
-    goal: "现在附近找个适合停留和吃饭的路线。",
-  },
-  {
-    id: "friend",
-    emoji: "💬",
-    title: "朋友推荐",
-    subtitle: "朋友发来的店也能排",
-    status: "已加入朋友推荐地点",
-    goal: "把朋友推荐的店加入今晚路线。",
-  },
+const MOCK_PARSED_PLACES: ParsedPlaceOption[] = [
+  { id: "plain-table", name: "Plain Table", category: "餐厅", sourceLabel: "来自攻略链接" },
+  { id: "quick-stop", name: "Quick Stop", category: "饭后聊天", sourceLabel: "来自朋友分享" },
+  { id: "kid-zone", name: "Kid Zone 奇趣亲子馆", category: "活动", sourceLabel: "来自商家链接" },
 ];
 
 type InputPanelProps = {
   goal: string;
-  wechat: string;
   seed: string;
   loading: boolean;
   travelSettingsSummary: string;
   activeDemoScenarioId?: DemoScenarioId | null;
   variant?: "card" | "sheet";
   onGoalChange: (value: string) => void;
-  onWechatChange: (value: string) => void;
   onSeedChange: (value: string) => void;
   onOpenTravelSettings: () => void;
   onSelectDemoScenario: (scenarioId: DemoScenarioId) => void;
@@ -76,61 +53,35 @@ type InputPanelProps = {
   onGenerate: () => void;
 };
 
-function ActionChip({
-  active,
-  onClick,
-  children,
-  className = "",
-  testId,
-}: {
-  active?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-  className?: string;
-  testId?: string;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testId}
-      onClick={onClick}
-      className={`inline-flex min-w-0 items-center gap-1 rounded-full border px-2.5 py-1.5 text-[11px] font-bold leading-4 transition active:scale-[0.98] ${
-        active
-          ? "border-meituan-yellow/60 bg-meituan-yellow/12 text-meituan-ink"
-          : "border-black/8 bg-white text-black/62 hover:border-black/12 hover:bg-meituan-gray/50"
-      } ${className}`}
-    >
-      {children}
-    </button>
-  );
+function shouldSuggestImportGoal(currentGoal: string) {
+  const trimmed = currentGoal.trim();
+  return !trimmed || trimmed === defaultInputs.goal.trim();
 }
 
 export function InputPanel({
   goal,
-  wechat,
   seed,
   loading,
   travelSettingsSummary,
   activeDemoScenarioId,
   variant = "card",
   onGoalChange,
-  onWechatChange,
   onSeedChange,
   onOpenTravelSettings,
   onSelectDemoScenario,
   onResetDemo,
   onGenerate,
 }: InputPanelProps) {
-  const [wechatOpen, setWechatOpen] = useState(false);
-  const [seedOpen, setSeedOpen] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
-  const [favoritesPicked, setFavoritesPicked] = useState(false);
-  const [activeEntrySource, setActiveEntrySource] = useState<EntrySourceId | null>(null);
+  const [importSheetOpen, setImportSheetOpen] = useState(false);
+  const [importLinkText, setImportLinkText] = useState("");
+  const [parsedPlacesVisible, setParsedPlacesVisible] = useState(false);
+  const [selectedPlaceIds, setSelectedPlaceIds] = useState<string[]>([]);
+  const [importedPlaces, setImportedPlaces] = useState<ParsedPlaceOption[]>([]);
   const voiceTimerRef = useRef<number | null>(null);
 
-  const hasWechat = wechat.trim().length > 0;
-  const hasSeed = seed.trim().length > 0;
   const isSheet = variant === "sheet";
+  const hasImportedPlaces = importedPlaces.length > 0;
 
   useEffect(() => {
     return () => {
@@ -150,26 +101,39 @@ export function InputPanel({
     }, 1000);
   }
 
-  function handleFavoritesPick() {
-    if (!favoritesPicked && !hasSeed) {
-      onSeedChange(MOCK_FAVORITE_SEED);
-      setFavoritesPicked(true);
-      return;
-    }
-    setSeedOpen((open) => !open);
+  function openImportSheet() {
+    setImportSheetOpen(true);
+    setParsedPlacesVisible(false);
+    setSelectedPlaceIds([]);
   }
 
-  function handleEntrySource(sourceId: EntrySourceId) {
-    const source = ENTRY_SOURCES.find((item) => item.id === sourceId);
-    if (!source) return;
+  function closeImportSheet() {
+    setImportSheetOpen(false);
+    setParsedPlacesVisible(false);
+    setSelectedPlaceIds([]);
+  }
 
-    setActiveEntrySource(sourceId);
-    onGoalChange(source.goal);
+  function handleParsePlaces() {
+    setParsedPlacesVisible(true);
+    setSelectedPlaceIds(MOCK_PARSED_PLACES.map((place) => place.id));
+  }
 
-    if (sourceId === "favorites") {
-      onSeedChange(MOCK_FAVORITE_SEED);
-      setFavoritesPicked(true);
+  function togglePlaceSelection(placeId: string) {
+    setSelectedPlaceIds((current) =>
+      current.includes(placeId) ? current.filter((id) => id !== placeId) : [...current, placeId],
+    );
+  }
+
+  function handleConfirmImportedPlaces() {
+    const selected = MOCK_PARSED_PLACES.filter((place) => selectedPlaceIds.includes(place.id));
+    if (!selected.length) return;
+
+    setImportedPlaces(selected);
+    onSeedChange(selected.map((place) => `${place.name}(${place.sourceLabel})`).join("; "));
+    if (shouldSuggestImportGoal(goal)) {
+      onGoalChange(IMPORT_GOAL_SUGGESTION);
     }
+    closeImportSheet();
   }
 
   return (
@@ -177,8 +141,8 @@ export function InputPanel({
       data-testid="home-input-sheet"
       className={
         isSheet
-          ? "bg-white"
-          : "overflow-hidden rounded-2xl border border-black/5 bg-white shadow-soft"
+          ? "relative bg-white"
+          : "relative overflow-hidden rounded-2xl border border-black/5 bg-white shadow-soft"
       }
     >
       {!isSheet ? (
@@ -203,104 +167,51 @@ export function InputPanel({
       <div className={`space-y-3 ${isSheet ? "px-1 pb-1 pt-2" : "space-y-4 px-4 pb-4"}`}>
         <label className="block">
           <span className="mb-1.5 block text-sm font-extrabold text-meituan-ink">你想怎么安排？</span>
-          <textarea
-            data-testid="goal-input"
-            className={`w-full resize-none rounded-2xl border border-black/8 bg-meituan-gray/80 p-3 text-[15px] leading-6 text-meituan-ink outline-none transition placeholder:text-black/35 focus:border-meituan-yellow focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,195,0,0.25)] ${
-              isSheet ? "h-24" : "h-32"
-            }`}
-            value={goal}
-            onChange={(event) => onGoalChange(event.target.value)}
-            placeholder="例如：晚上和朋友吃饭，吃完还想找地方聊聊天"
-          />
+          <div className="relative">
+            <textarea
+              data-testid="goal-input"
+              className={`w-full resize-none rounded-2xl border border-black/8 bg-meituan-gray/80 p-3 pr-11 text-[15px] leading-6 text-meituan-ink outline-none transition placeholder:text-black/35 focus:border-meituan-yellow focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,195,0,0.25)] ${
+                isSheet ? "h-24" : "h-32"
+              }`}
+              value={goal}
+              onChange={(event) => onGoalChange(event.target.value)}
+              placeholder="例如：晚上和朋友吃饭，有人不吃辣，别排太久，吃完想找地方聊天"
+            />
+            <button
+              type="button"
+              data-testid="voice-input-button"
+              disabled={voiceListening}
+              onClick={handleVoiceInput}
+              aria-label={voiceListening ? "正在听你说" : "语音说需求"}
+              className={`absolute bottom-2 right-2 grid h-8 w-8 place-items-center rounded-full border text-base leading-none transition active:scale-95 disabled:opacity-80 ${
+                voiceListening
+                  ? "border-meituan-yellow/50 bg-meituan-yellow/15"
+                  : "border-black/8 bg-white text-meituan-ink hover:border-meituan-yellow/40 hover:bg-meituan-yellow/10"
+              }`}
+            >
+              <span aria-hidden="true">{voiceListening ? "···" : "🎤"}</span>
+            </button>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-4 text-black/45">
+            {voiceListening ? <span className="font-semibold text-meituan-ink">正在听你说…</span> : null}
+            {voiceListening ? <span aria-hidden="true" className="text-black/20">·</span> : null}
+            <button
+              type="button"
+              data-testid="import-place-entry"
+              onClick={openImportSheet}
+              className="font-semibold text-black/55 transition hover:text-meituan-ink"
+            >
+              🔗 粘贴链接/地点
+            </button>
+          </div>
         </label>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            data-testid="voice-input-button"
-            disabled={voiceListening}
-            onClick={handleVoiceInput}
-            className={`inline-flex min-w-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold leading-4 transition active:scale-[0.98] disabled:opacity-80 ${
-              voiceListening
-                ? "border-meituan-yellow/50 bg-meituan-yellow/10 text-meituan-ink"
-                : "border-black/10 bg-meituan-gray/60 text-meituan-ink hover:border-meituan-yellow/40 hover:bg-meituan-yellow/10"
-            }`}
-          >
-            <span aria-hidden="true">🎤</span>
-            <span>{voiceListening ? "正在听你说…" : "语音输入"}</span>
-          </button>
-
-          <ActionChip
-            active={hasWechat || wechatOpen}
-            onClick={() => setWechatOpen((open) => !open)}
-            testId="companion-chip-button"
-          >
-            {hasWechat ? "同行人 · 已补充" : "同行人"}
-          </ActionChip>
-
-          <ActionChip
-            active={favoritesPicked || hasSeed || seedOpen}
-            onClick={handleFavoritesPick}
-            className="max-w-full"
-            testId="favorites-pick-button"
-          >
-            <span className="truncate">
-              {favoritesPicked ? "已选择 3 个想去地点" : hasSeed ? "从收藏选 · 已补充" : "从收藏选"}
-            </span>
-          </ActionChip>
-        </div>
-
-        {wechatOpen ? (
-          <textarea
-            className="h-20 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
-            value={wechat}
-            onChange={(event) => onWechatChange(event.target.value)}
-            placeholder={defaultInputs.wechat}
-          />
+        {hasImportedPlaces ? (
+          <p data-testid="imported-place-summary" className="text-[11px] leading-4 text-black/50">
+            <span className="font-bold text-meituan-ink">已导入 {importedPlaces.length} 个地点：</span>
+            {importedPlaces.map((place) => place.name).join(" · ")}
+          </p>
         ) : null}
-
-        {seedOpen ? (
-          <textarea
-            className="h-20 w-full resize-none rounded-xl border border-black/8 bg-white p-3 text-sm leading-6 text-black/70 outline-none transition placeholder:text-black/35 focus:border-meituan-yellow"
-            value={seed}
-            onChange={(event) => {
-              onSeedChange(event.target.value);
-              if (!event.target.value.trim()) setFavoritesPicked(false);
-            }}
-            placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
-          />
-        ) : null}
-
-        <div>
-          <p className="mb-2 text-[11px] font-bold text-black/45">从哪里开始规划？</p>
-          <div className="grid grid-cols-3 gap-2">
-            {ENTRY_SOURCES.map((source) => {
-              const active = activeEntrySource === source.id;
-              return (
-                <button
-                  key={source.id}
-                  type="button"
-                  data-testid={`entry-source-${source.id}`}
-                  onClick={() => handleEntrySource(source.id)}
-                  className={`flex min-h-[88px] flex-col rounded-xl border px-2 py-2 text-left transition active:scale-[0.99] ${
-                    active
-                      ? "border-meituan-yellow bg-meituan-yellow/12 shadow-[0_4px_12px_rgba(255,195,0,0.14)] ring-1 ring-meituan-yellow/30"
-                      : "border-black/8 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.04)] hover:border-black/12"
-                  }`}
-                >
-                  <span className="text-base leading-none" aria-hidden="true">
-                    {source.emoji}
-                  </span>
-                  <span className="mt-1.5 block text-[11px] font-extrabold leading-4 text-meituan-ink">{source.title}</span>
-                  <span className="mt-0.5 block text-[9px] font-medium leading-3 text-black/45">{source.subtitle}</span>
-                  {active ? (
-                    <span className="mt-1.5 block text-[9px] font-bold leading-3 text-emerald-700">{source.status}</span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         <button
           type="button"
@@ -359,6 +270,95 @@ export function InputPanel({
           </div>
         </div>
       </div>
+
+      {importSheetOpen ? (
+        <div className="absolute inset-0 z-40 flex flex-col justify-end bg-black/25">
+          <div
+            data-testid="import-place-sheet"
+            className="max-h-[78%] overflow-y-auto rounded-t-[24px] border-t border-white/80 bg-white px-4 pb-5 pt-3 shadow-[0_-12px_40px_rgba(15,23,42,0.16)]"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-extrabold text-meituan-ink">导入想去地点</h3>
+              <button
+                type="button"
+                className="text-[11px] font-bold text-black/45"
+                onClick={closeImportSheet}
+              >
+                关闭
+              </button>
+            </div>
+
+            <p className="mb-3 text-[10px] leading-4 text-black/45">{IMPORT_MOCK_DISCLAIMER}</p>
+
+            <label className="block">
+              <span className="mb-1.5 block text-[11px] font-bold text-black/45">粘贴内容</span>
+              <textarea
+                data-testid="import-place-input"
+                className="h-20 w-full resize-none rounded-xl border border-black/8 bg-meituan-gray/60 p-3 text-sm leading-6 text-meituan-ink outline-none transition placeholder:text-black/35 focus:border-meituan-yellow focus:bg-white"
+                value={importLinkText}
+                onChange={(event) => setImportLinkText(event.target.value)}
+                placeholder="粘贴攻略链接、朋友分享链接、商家链接或地点名"
+              />
+            </label>
+
+            <ul className="mt-2 space-y-1 text-[10px] leading-4 text-black/45">
+              <li>· 小红书攻略链接</li>
+              <li>· 微信朋友分享</li>
+              <li>· 美团/点评商家链接</li>
+              <li>· 地点名</li>
+            </ul>
+
+            <button
+              type="button"
+              data-testid="import-place-parse-button"
+              className="mt-3 h-10 w-full rounded-xl border border-black/8 bg-white text-[12px] font-extrabold text-meituan-ink transition hover:border-meituan-yellow/50"
+              onClick={handleParsePlaces}
+            >
+              识别地点
+            </button>
+
+            {parsedPlacesVisible ? (
+              <div className="mt-3 space-y-2">
+                {MOCK_PARSED_PLACES.map((place) => {
+                  const checked = selectedPlaceIds.includes(place.id);
+                  return (
+                    <label
+                      key={place.id}
+                      data-testid="import-place-option"
+                      className={`flex cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 ${
+                        checked ? "border-meituan-yellow bg-meituan-yellow/10" : "border-black/8 bg-white"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePlaceSelection(place.id)}
+                        className="mt-0.5 h-4 w-4 rounded border-black/20 text-meituan-yellow focus:ring-meituan-yellow/40"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-extrabold text-meituan-ink">
+                          {place.name} · {place.category}
+                        </span>
+                        <span className="mt-0.5 block text-[10px] text-black/45">{place.sourceLabel}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              data-testid="import-place-confirm-button"
+              disabled={!parsedPlacesVisible || selectedPlaceIds.length === 0}
+              className="mt-4 h-11 w-full rounded-2xl bg-meituan-yellow text-[13px] font-extrabold text-meituan-ink shadow-md transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
+              onClick={handleConfirmImportedPlaces}
+            >
+              {selectedPlaceIds.length === 0 && parsedPlacesVisible ? "请先选择地点" : "加入路线"}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -325,7 +325,6 @@ export default function Home() {
                   <InputPanel
                     variant="sheet"
                     goal={goal}
-                    wechat={wechat}
                     seed={seed}
                     loading={loading}
                     travelSettingsSummary={travelSettingsSummary}
@@ -334,7 +333,6 @@ export default function Home() {
                       setGoal(value);
                       setActiveDemoScenarioId(null);
                     }}
-                    onWechatChange={setWechat}
                     onSeedChange={setSeed}
                     onOpenTravelSettings={openTravelSettings}
                     onSelectDemoScenario={handleSelectDemoScenario}

@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { getScenarioFixture } from "../src/lib/scenarioFixtures";
 
-const MOCK_VOICE_GOAL = "今晚和朋友吃饭，别排太久，吃完想找地方聊天。";
+const MOCK_VOICE_GOAL = "今晚和两个朋友吃饭，有人不吃辣，别排太久，吃完想找地方聊天。";
 
 async function gotoHome(page: Page) {
   await page.goto("/");
@@ -169,10 +169,19 @@ test.describe("map-first home entry", () => {
   });
 
   test("home entry shortcuts do not block planning", async ({ page }) => {
-    const favoritesButton = page.getByTestId("favorites-pick-button");
-    await favoritesButton.scrollIntoViewIfNeeded();
-    await favoritesButton.click();
-    await expect(favoritesButton).toContainText("已选择 3 个想去地点");
+    const importEntry = page.getByTestId("import-place-entry");
+    await importEntry.scrollIntoViewIfNeeded();
+    await importEntry.click();
+    await expect(page.getByTestId("import-place-sheet")).toBeVisible();
+
+    await page.getByTestId("import-place-input").fill("https://xiaohongshu.com/example-guide");
+    await page.getByTestId("import-place-parse-button").click();
+    await expect(page.getByTestId("import-place-option").first()).toBeVisible();
+    await page.getByTestId("import-place-confirm-button").click();
+
+    await expect(page.getByTestId("imported-place-summary")).toBeVisible();
+    await expect(page.getByTestId("imported-place-summary")).toContainText("已导入");
+    await expect(page.getByTestId("nearby-autofill-toggle")).toHaveCount(0);
 
     await clickStartPlanning(page);
     await waitForResultScreen(page);
@@ -182,6 +191,8 @@ test.describe("map-first home entry", () => {
   test("voice input mock fills goal and can plan", async ({ page }) => {
     const voiceButton = page.getByTestId("voice-input-button");
     await voiceButton.scrollIntoViewIfNeeded();
+    await expect(page.getByTestId("companion-chip-button")).toHaveCount(0);
+    await expect(page.getByTestId("recognized-constraints")).toHaveCount(0);
     await voiceButton.click();
     await expect(page.getByTestId("goal-input")).toHaveValue(MOCK_VOICE_GOAL, { timeout: 3_000 });
 
