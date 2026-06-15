@@ -59,7 +59,7 @@ const LeafletPlannerMap = dynamic(() => import("@/components/LeafletPlannerMap")
 const HomeMapBackground = dynamic(() => import("@/components/HomeMapBackground"), {
   ssr: false,
   loading: () => (
-    <div className="h-full w-full bg-[#eef1e8]" data-testid="home-map-fallback" aria-hidden="true" />
+    <div className="h-full w-full bg-[#f3f4f0]" data-testid="home-map-fallback" aria-hidden="true" />
   ),
 });
 

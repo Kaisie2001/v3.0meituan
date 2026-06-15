@@ -33,13 +33,13 @@ const tileProviders = [
 
 /** Visual-only home markers. Not passed to planning / routing. */
 const HOME_VISUAL_MARKER_SPECS = [
-  { poiId: "plain-table", label: "餐厅", color: "#FFC300" },
-  { poiId: "tree-cafe", label: "咖啡", color: "#F59E0B" },
-  { poiId: "book-nook", label: "公园", color: "#4ADE80" },
-  { poiId: "metro-mall", label: "商场", color: "#94A3B8" },
-  { poiId: "art-walk", label: "展览", color: "#A78BFA" },
-  { poiId: "kid-zone", label: "亲子", color: "#FB7185" },
-  { poiId: "easy-pick", label: "办事点", color: "#64748B" },
+  { poiId: "plain-table", label: "餐厅", color: "#E2B84A", primary: true },
+  { poiId: "tree-cafe", label: "咖啡", color: "#D1D5DB", primary: false },
+  { poiId: "book-nook", label: "公园", color: "#D1D5DB", primary: false },
+  { poiId: "metro-mall", label: "商场", color: "#E5E7EB", primary: false },
+  { poiId: "art-walk", label: "展览", color: "#E5E7EB", primary: false },
+  { poiId: "kid-zone", label: "亲子", color: "#E5E7EB", primary: false },
+  { poiId: "easy-pick", label: "办事点", color: "#E2E8F0", primary: false },
 ] as const;
 
 function toLatLng(poi: Poi) {
@@ -67,7 +67,7 @@ function MapFallback({ className = "" }: { className?: string }) {
     <div
       data-testid="home-map-fallback"
       aria-hidden="true"
-      className={`h-full w-full bg-[#eef1e8] ${className}`}
+      className={`h-full w-full bg-[#f3f4f0] ${className}`}
     />
   );
 }
@@ -162,19 +162,19 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
 
         for (const marker of visualMarkers) {
           L.circleMarker(marker.latlng, {
-            radius: 7,
+            radius: marker.primary ? 6.5 : 5.5,
             color: "#ffffff",
-            weight: 2,
+            weight: 1.5,
             fillColor: marker.color,
-            fillOpacity: 0.92,
+            fillOpacity: marker.primary ? 0.86 : 0.7,
             interactive: false,
           }).addTo(markerLayerRef.current);
 
           const icon = L.divIcon({
             className: "home-map-marker-label",
-            html: `<span style="display:inline-block;padding:2px 7px;border-radius:9999px;background:rgba(255,255,255,0.92);border:1px solid rgba(15,23,42,0.08);font-size:10px;font-weight:700;color:rgba(15,23,42,0.62);box-shadow:0 1px 2px rgba(15,23,42,0.08);white-space:nowrap;">${marker.label}</span>`,
+            html: `<span style="display:inline-block;padding:1px 6px;border-radius:9999px;background:rgba(255,255,255,0.76);border:1px solid rgba(15,23,42,0.05);font-size:9px;font-weight:600;color:rgba(15,23,42,0.46);box-shadow:0 1px 2px rgba(15,23,42,0.04);white-space:nowrap;">${marker.label}</span>`,
             iconSize: [0, 0],
-            iconAnchor: [0, -14],
+            iconAnchor: [0, -12],
           });
           L.marker(marker.latlng, { icon, interactive: false }).addTo(markerLayerRef.current);
         }
@@ -250,7 +250,7 @@ export function HomeMapBackground({ className = "" }: HomeMapBackgroundProps) {
       ref={wrapperRef}
       data-testid="home-map-background"
       aria-hidden="true"
-      className={`h-full w-full overflow-hidden ${className}`}
+      className={`home-map-soft-theme relative h-full w-full overflow-hidden ${className}`}
     >
       <div
         ref={hostRef}

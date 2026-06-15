@@ -33,3 +33,30 @@ input {
     linear-gradient(90deg, rgba(31, 35, 41, 0.06) 1px, transparent 1px);
   background-size: 34px 34px;
 }
+
+/* Home map only — soft backdrop behind the input sheet. Does not affect planner map. */
+.home-map-soft-theme .leaflet-tile-pane {
+  filter: grayscale(0.24) saturate(0.54) brightness(1.1) contrast(0.9);
+}
+
+.home-map-soft-theme .leaflet-container::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.34) 0%, rgba(255, 255, 255, 0.1) 42%, rgba(255, 250, 244, 0.26) 100%),
+    radial-gradient(ellipse 90% 70% at 50% 38%, rgba(255, 255, 255, 0.16), transparent 68%);
+}
+
+.home-map-soft-theme .leaflet-control-zoom a {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  color: rgba(15, 23, 42, 0.45) !important;
+}
+
+.home-map-marker-label {
+  background: transparent !important;
+  border: none !important;
+}
