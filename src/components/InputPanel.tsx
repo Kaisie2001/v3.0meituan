@@ -23,6 +23,42 @@ const SCENARIO_SHORTCUTS: Record<DemoScenarioId, { emoji: string; subtitle: stri
 const MOCK_VOICE_GOAL = "今晚和朋友吃饭，别排太久，吃完想找地方聊天。";
 const MOCK_FAVORITE_SEED = "三里屯咖啡; 朝阳公园野餐; 望京小馆";
 
+type EntrySourceId = "favorites" | "nearby" | "friend";
+
+const ENTRY_SOURCES: {
+  id: EntrySourceId;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  goal: string;
+}[] = [
+  {
+    id: "favorites",
+    emoji: "⭐",
+    title: "收藏想去",
+    subtitle: "想去的店、清单、团购",
+    status: "已加入 3 个收藏地点",
+    goal: "从我收藏的想去地点里，安排一个今晚的路线。",
+  },
+  {
+    id: "nearby",
+    emoji: "📍",
+    title: "附近可成行",
+    subtitle: "现在附近适合去哪",
+    status: "已读取附近推荐",
+    goal: "现在附近找个适合停留和吃饭的路线。",
+  },
+  {
+    id: "friend",
+    emoji: "💬",
+    title: "朋友推荐",
+    subtitle: "朋友发来的店也能排",
+    status: "已加入朋友推荐地点",
+    goal: "把朋友推荐的店加入今晚路线。",
+  },
+];
+
 type InputPanelProps = {
   goal: string;
   wechat: string;
@@ -86,6 +122,7 @@ export function InputPanel({
   const [seedOpen, setSeedOpen] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
   const [favoritesPicked, setFavoritesPicked] = useState(false);
+  const [activeEntrySource, setActiveEntrySource] = useState<EntrySourceId | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
 
   const hasWechat = wechat.trim().length > 0;
@@ -117,6 +154,19 @@ export function InputPanel({
       return;
     }
     setSeedOpen((open) => !open);
+  }
+
+  function handleEntrySource(sourceId: EntrySourceId) {
+    const source = ENTRY_SOURCES.find((item) => item.id === sourceId);
+    if (!source) return;
+
+    setActiveEntrySource(sourceId);
+    onGoalChange(source.goal);
+
+    if (sourceId === "favorites") {
+      onSeedChange(MOCK_FAVORITE_SEED);
+      setFavoritesPicked(true);
+    }
   }
 
   return (
@@ -212,6 +262,37 @@ export function InputPanel({
             placeholder={defaultInputs.seed || "例如：收藏的店、想去的展览"}
           />
         ) : null}
+
+        <div>
+          <p className="mb-2 text-[11px] font-bold text-black/45">从哪里开始规划？</p>
+          <div className="grid grid-cols-3 gap-2">
+            {ENTRY_SOURCES.map((source) => {
+              const active = activeEntrySource === source.id;
+              return (
+                <button
+                  key={source.id}
+                  type="button"
+                  data-testid={`entry-source-${source.id}`}
+                  onClick={() => handleEntrySource(source.id)}
+                  className={`flex min-h-[88px] flex-col rounded-xl border px-2 py-2 text-left transition active:scale-[0.99] ${
+                    active
+                      ? "border-meituan-yellow bg-meituan-yellow/12 shadow-[0_4px_12px_rgba(255,195,0,0.14)] ring-1 ring-meituan-yellow/30"
+                      : "border-black/8 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.04)] hover:border-black/12"
+                  }`}
+                >
+                  <span className="text-base leading-none" aria-hidden="true">
+                    {source.emoji}
+                  </span>
+                  <span className="mt-1.5 block text-[11px] font-extrabold leading-4 text-meituan-ink">{source.title}</span>
+                  <span className="mt-0.5 block text-[9px] font-medium leading-3 text-black/45">{source.subtitle}</span>
+                  {active ? (
+                    <span className="mt-1.5 block text-[9px] font-bold leading-3 text-emerald-700">{source.status}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         <button
           type="button"
