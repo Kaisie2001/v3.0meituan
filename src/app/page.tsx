@@ -353,6 +353,7 @@ export default function Home() {
                     selectedPoiId={selectedPoiId}
                     onSelectPoi={handleSelectPoi}
                     mapPresentation={mapPresentation}
+                    selectedPlanType={selectedPlanType}
                   />
                 </div>
 
@@ -417,6 +418,7 @@ export default function Home() {
                   selectedPoiId={selectedPoiId}
                   onSelectPoi={handleSelectPoi}
                   mapPresentation={mapPresentation}
+                  selectedPlanType={selectedPlanType}
                 />
                 <RouteTimeline
                   routePlan={result.routePlan}

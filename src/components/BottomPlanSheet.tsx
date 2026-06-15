@@ -927,7 +927,7 @@ export function BottomPlanSheet({
   }
 
   return (
-    <div data-testid="plan-sheet" className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-8px_32px_rgba(0,0,0,0.12)]">
+    <div data-testid="plan-sheet" className="pointer-events-auto flex h-full min-h-[280px] w-full flex-col overflow-hidden rounded-t-[28px] border-t border-white/80 bg-white shadow-[0_-10px_40px_rgba(15,23,42,0.1)]">
       <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-black/12" aria-hidden="true" />
 
       <div className="flex shrink-0 gap-1 border-b border-black/6 px-3 pb-0 pt-1">

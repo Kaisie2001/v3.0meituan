@@ -12,6 +12,8 @@ type LeafletPlannerMapProps = {
   mapPresentation?: MapPresentation;
   /** @deprecated use mapPresentation.activeRoutePoiIds */
   routePoiIds?: string[];
+  /** Visual-only: styles active route as main vs fallback. */
+  selectedPlanType?: "main" | "fallback";
   variant?: "default" | "hero";
   className?: string;
 };
@@ -31,10 +33,43 @@ const tileProviders = [
   { label: "OSM HOT", url: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", attribution: "© OpenStreetMap contributors" },
 ];
 
-const ROUTE_COLOR = "#FFC300";
-const ROUTE_COLOR_ALT = "#F59E0B";
-const HIGHLIGHT_COLOR = "#111827";
-const ALTERNATE_COLOR = "#FB923C";
+const ROUTE_COLOR = "#E2B84A";
+const ROUTE_COLOR_ALT = "#D9C48A";
+const ROUTE_COLOR_FALLBACK = "#C8B88A";
+const ROUTE_OUTLINE_COLOR = "#ffffff";
+const MARKER_ROUTE = "#E2B84A";
+const MARKER_HIGHLIGHT = "#CBD5E1";
+const MARKER_ALTERNATE = "#D4C4B0";
+const MARKER_DIMMED = "#E2E8F0";
+const MARKER_SELECTED_RING = "#3D4450";
+
+function addRouteSegment(
+  layer: L.LayerGroup,
+  latlngs: L.LatLng[],
+  options: {
+    color: string;
+    weight: number;
+    opacity: number;
+    dashArray?: string;
+  },
+) {
+  L.polyline(latlngs, {
+    color: ROUTE_OUTLINE_COLOR,
+    weight: options.weight + 3.5,
+    opacity: 0.9,
+    lineCap: "round",
+    lineJoin: "round",
+  }).addTo(layer);
+
+  L.polyline(latlngs, {
+    color: options.color,
+    weight: options.weight,
+    opacity: options.opacity,
+    dashArray: options.dashArray,
+    lineCap: "round",
+    lineJoin: "round",
+  }).addTo(layer);
+}
 
 export function LeafletPlannerMap({
   pois,
@@ -42,10 +77,12 @@ export function LeafletPlannerMap({
   onSelectPoi,
   mapPresentation,
   routePoiIds = [],
+  selectedPlanType = "main",
   variant = "default",
   className = "",
 }: LeafletPlannerMapProps) {
   const isHero = variant === "hero";
+  const isFallbackPlan = selectedPlanType === "fallback";
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerLayerRef = useRef<L.LayerGroup | null>(null);
@@ -160,11 +197,15 @@ export function LeafletPlannerMap({
       const isDimmed = dimmedSet.has(poi.id) && !onRoute && !selected;
       const isHighlighted = highlightedSet.has(poi.id) || onRoute;
 
-      const fillColor = isAlternate ? ALTERNATE_COLOR : isHighlighted ? ROUTE_COLOR : "#94a3b8";
-      const radius = selected ? 11 : onRoute ? 10 : isHighlighted ? 8 : 6;
-      const weight = selected ? 3 : onRoute ? 2.5 : 2;
-      const fillOpacity = isDimmed ? 0.35 : 0.92;
-      const color = selected ? HIGHLIGHT_COLOR : isAlternate ? "#C2410C" : "#ffffff";
+      let fillColor = MARKER_HIGHLIGHT;
+      if (onRoute) fillColor = MARKER_ROUTE;
+      else if (isAlternate) fillColor = MARKER_ALTERNATE;
+      else if (isDimmed) fillColor = MARKER_DIMMED;
+
+      const radius = selected ? 10 : onRoute ? 9 : isHighlighted ? 7 : 5.5;
+      const weight = selected ? 2.5 : onRoute ? 2 : 1.5;
+      const fillOpacity = isDimmed ? 0.42 : onRoute ? 0.9 : isAlternate ? 0.68 : 0.78;
+      const color = selected ? MARKER_SELECTED_RING : "#ffffff";
 
       const marker = L.circleMarker(latlng, {
         radius,
@@ -179,17 +220,17 @@ export function LeafletPlannerMap({
       const tooltip = routeLabel
         ? `${routeLabel}. ${poi.name} · ${poi.goabilityScore}分`
         : `${poi.name} · ${poi.goabilityScore}分`;
-      marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8] });
+      marker.bindTooltip(tooltip, { direction: "top", offset: [0, -10] });
       marker.addTo(markerLayerRef.current);
 
       if (routeLabel) {
         const badge = L.divIcon({
-          className: "map-route-badge",
-          html: `<span style="display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:9999px;background:#111827;color:#FFC300;font-size:10px;font-weight:800;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.2)">${routeLabel}</span>`,
-          iconSize: [18, 18],
-          iconAnchor: [9, 9],
+          className: `planner-map-route-badge${selected ? " is-selected" : ""}`,
+          html: `<span>${routeLabel}</span>`,
+          iconSize: selected ? [19, 19] : [17, 17],
+          iconAnchor: [selected ? 9.5 : 8.5, 22],
         });
-        L.marker(latlng, { icon: badge, interactive: false }).addTo(labelLayerRef.current);
+        L.marker(latlng, { icon: badge, interactive: false, zIndexOffset: 500 }).addTo(labelLayerRef.current);
       }
     }
   }, [pois, onSelectPoi, selectedPoiId, routeOrderMap, highlightedSet, dimmedSet, alternateSet]);
@@ -200,20 +241,26 @@ export function LeafletPlannerMap({
 
     const boundsPoints: L.LatLng[] = [];
     for (const segment of segmentGeometries) {
-      const polyline = L.polyline(segment.latlngs, {
-        color: segment.segmentIndex % 2 === 0 ? ROUTE_COLOR_ALT : ROUTE_COLOR,
-        weight: 5,
-        opacity: 0.9,
-        lineCap: "round",
+      const isAltSegment = segment.segmentIndex % 2 === 0;
+      const color = isFallbackPlan
+        ? ROUTE_COLOR_FALLBACK
+        : isAltSegment
+          ? ROUTE_COLOR_ALT
+          : ROUTE_COLOR;
+
+      addRouteSegment(routeLayerRef.current, segment.latlngs, {
+        color,
+        weight: isFallbackPlan ? 3.5 : 4,
+        opacity: isFallbackPlan ? 0.72 : 0.9,
+        dashArray: isFallbackPlan ? "9 7" : undefined,
       });
-      polyline.addTo(routeLayerRef.current);
       boundsPoints.push(...segment.latlngs);
     }
 
     if (boundsPoints.length >= 2) {
       mapRef.current.fitBounds(L.latLngBounds(boundsPoints).pad(0.18));
     }
-  }, [segmentGeometries]);
+  }, [segmentGeometries, isFallbackPlan]);
 
   useEffect(() => {
     if (!mapRef.current) return;
@@ -226,17 +273,17 @@ export function LeafletPlannerMap({
   }, [variant, className]);
 
   const legend = (
-    <div className={`flex flex-wrap gap-x-3 gap-y-1 text-black/55 ${isHero ? "text-[10px]" : "text-xs"}`}>
+    <div className={`flex flex-wrap gap-x-3 gap-y-1 text-black/50 ${isHero ? "text-[10px]" : "text-xs"}`}>
       <span className="inline-flex items-center gap-1">
         <i className="inline-block h-0.5 w-4 rounded-full" style={{ background: ROUTE_COLOR }} />
         推荐路线
       </span>
       <span className="inline-flex items-center gap-1">
-        <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ROUTE_COLOR }} />
+        <i className="inline-block h-2 w-2 rounded-full border border-white shadow-sm" style={{ background: MARKER_ROUTE }} />
         途经点
       </span>
       <span className="inline-flex items-center gap-1">
-        <i className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: ALTERNATE_COLOR }} />
+        <i className="inline-block h-2 w-2 rounded-full border border-white/90" style={{ background: MARKER_ALTERNATE }} />
         可替换
       </span>
     </div>
@@ -246,21 +293,25 @@ export function LeafletPlannerMap({
     return (
       <div
         data-testid="map-container"
-        className={`relative z-0 h-full w-full overflow-hidden bg-slate-100 ${className}`}
+        className={`planner-map-soft-theme relative z-0 h-full w-full overflow-hidden bg-[#f3f4f0] ${className}`}
       >
         <div
           ref={hostRef}
           className="absolute inset-0 z-0 [&_.leaflet-bottom]:!z-[1] [&_.leaflet-control-attribution]:!z-[1] [&_.leaflet-control]:!z-[2] [&_.leaflet-pane]:!z-[1] [&_.leaflet-top]:!z-[2]"
         />
-        <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-xl bg-white/95 px-2.5 py-2 shadow-md backdrop-blur-sm">
+        <div className="pointer-events-none absolute left-2 top-2 z-[3] max-w-[calc(100%-1rem)] rounded-xl border border-black/5 bg-white/90 px-2.5 py-2 shadow-sm backdrop-blur-sm">
           {legend}
-          {mapHint ? <p className="mt-1 max-w-[240px] text-[10px] leading-4 text-black/50">{mapHint}</p> : null}
+          {mapHint ? <p className="mt-1 max-w-[240px] text-[10px] leading-4 text-black/45">{mapHint}</p> : null}
         </div>
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] h-24 bg-gradient-to-t from-white/75 via-white/28 to-transparent"
+          aria-hidden="true"
+        />
         {tileFailed ? (
-          <div className="absolute inset-0 z-[4] grid place-items-center bg-slate-50 text-center">
+          <div className="absolute inset-0 z-[4] grid place-items-center bg-[#f3f4f0] text-center">
             <div className="max-w-md px-6">
-              <p className="text-sm font-bold text-black/75">底图加载失败</p>
-              <p className="mt-2 text-sm text-black/60">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
+              <p className="text-sm font-bold text-black/70">底图加载失败</p>
+              <p className="mt-2 text-sm text-black/55">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
             </div>
           </div>
         ) : null}
@@ -269,7 +320,10 @@ export function LeafletPlannerMap({
   }
 
   return (
-    <section data-testid="map-container" className={`rounded-lg border border-black/5 bg-white p-3 shadow-soft ${className}`}>
+    <section
+      data-testid="map-container"
+      className={`planner-map-soft-theme rounded-lg border border-black/5 bg-white p-3 shadow-soft ${className}`}
+    >
       <div className="mb-3 flex flex-col gap-2">
         <div>
           <h2 className="text-base font-bold">动态规划地图</h2>
@@ -278,13 +332,13 @@ export function LeafletPlannerMap({
         </div>
         {legend}
       </div>
-      <div className="relative h-[260px] w-full overflow-hidden rounded-lg border border-black/10">
+      <div className="relative h-[260px] w-full overflow-hidden rounded-lg border border-black/8 bg-[#f3f4f0]">
         <div ref={hostRef} className="absolute inset-0" />
         {tileFailed ? (
-          <div className="absolute inset-0 grid place-items-center bg-slate-50 text-center">
+          <div className="absolute inset-0 grid place-items-center bg-[#f3f4f0] text-center">
             <div className="max-w-md px-6">
-              <p className="text-sm font-bold text-black/75">底图加载失败</p>
-              <p className="mt-2 text-sm text-black/60">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
+              <p className="text-sm font-bold text-black/70">底图加载失败</p>
+              <p className="mt-2 text-sm text-black/55">可能是网络限制导致 OSM 瓦片请求失败。已自动尝试切换多个公开镜像。</p>
             </div>
           </div>
         ) : null}
